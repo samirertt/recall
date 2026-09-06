@@ -143,6 +143,26 @@ export interface Attachment {
   created_at: string;
 }
 
+export type IncidentRelationType =
+  | "related_to"
+  | "caused_by"
+  | "solved_by"
+  | "supersedes"
+  | "duplicate_of";
+
+export interface RelatedIncident {
+  incident_id: number;
+  title: string | null;
+  depth: number;
+}
+
+export interface SuggestedRelation {
+  incident_id: number;
+  title: string | null;
+  similarity: number;
+  suggested_relation_type: IncidentRelationType;
+}
+
 // --- API calls ---
 
 export const api = {
@@ -190,4 +210,19 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json();
   },
+
+  getRelatedIncidents: (incidentId: number, maxDepth = 2) =>
+    request<RelatedIncident[]>(`/incidents/${incidentId}/related?max_depth=${maxDepth}`),
+
+  getSuggestedRelations: (incidentId: number) =>
+    request<SuggestedRelation[]>(`/incidents/${incidentId}/relations/suggested`),
+
+  createRelation: (incidentId: number, targetIncidentId: number, relationType: IncidentRelationType) =>
+    request(`/incidents/${incidentId}/relations`, {
+      method: "POST",
+      body: JSON.stringify({
+        target_incident_id: targetIncidentId,
+        relation_type: relationType,
+      }),
+    }),
 };

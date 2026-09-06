@@ -167,12 +167,13 @@ start of any new session — do not rely on conversational memory.
 - [ ] "Never overwrite an already-set field" rule is a simple null-check, not provenance-aware — it can't distinguish "heuristic already set this" from "human deliberately set this," so a field the heuristic fills first will resist a later, better AI pass unless manually cleared. A `force re-enrich` path (Section 41) would resolve this; not built yet.
 
 ## PHASE 11 — Knowledge Graph
-- [ ] Relationship schema (typed edges: related_to, caused_by, solved_by, supersedes, ...)
-- [ ] Related-incidents queries
-- [ ] Technology↔technology relationships
-- [ ] Project↔incident relationships
-- [ ] AI-suggested relationships (non-destructive, confidence-tracked)
-- [ ] Graph visualization (frontend)
+- [x] Relationship schema (typed edges: related_to, caused_by, solved_by, supersedes, ...) — Phase 2
+- [x] Related-incidents queries — `WITH RECURSIVE` traversal (Phase 2) now exposed via GET /incidents/{id}/related (max_depth, relation_type filters)
+- [x] Human-authored relationship API — POST/GET/DELETE /incidents/{id}/relations, enforces the canonical `source_id < target_id` ordering for symmetric types (related_to/duplicate_of) so a pair can never end up double-stored
+- [ ] Technology↔technology relationships — data model exists (Phase 2), no API/UI yet
+- [x] Project↔incident relationships — via PATCH /incidents/{id} `project_names` (Phase 5); no dedicated relationship-browsing API
+- [x] AI-suggested relationships (non-destructive, confidence-tracked) — GET /incidents/{id}/relations/suggested computes candidates from vector similarity on demand and **never persists anything**; a human/frontend explicitly accepts via the create-relation endpoint (Section 29). Verified with a real embedding similarity match (94%) in a live browser test.
+- [x] Graph visualization (frontend) — a simple related/suggested-incidents list on the incident detail page, with a one-click "Link" to accept a suggestion. **Not** the force-directed graph view docs/RESEARCH.md's frontend stack section describes (`react-force-graph`) — that's still open if a visual graph explorer is wanted later.
 
 ## PHASE 12 — Claude Code Integration
 - [ ] MCP server scaffold

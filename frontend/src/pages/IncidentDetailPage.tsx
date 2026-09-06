@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api, type Incident } from "../lib/api";
 
 const FIELD_LABELS: [keyof Incident, string][] = [
@@ -59,6 +59,24 @@ export default function IncidentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attachments", incidentId] });
       setFile(null);
+    },
+  });
+
+  const relatedQuery = useQuery({
+    queryKey: ["related", incidentId],
+    queryFn: () => api.getRelatedIncidents(incidentId),
+  });
+
+  const suggestedQuery = useQuery({
+    queryKey: ["suggested-relations", incidentId],
+    queryFn: () => api.getSuggestedRelations(incidentId),
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: (targetId: number) => api.createRelation(incidentId, targetId, "related_to"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["related", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["suggested-relations", incidentId] });
     },
   });
 
@@ -236,6 +254,52 @@ export default function IncidentDetailPage() {
             Upload
           </button>
         </form>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Related Incidents
+        </h3>
+        <div className="mt-1 flex flex-col gap-1">
+          {relatedQuery.data?.length === 0 && (
+            <p className="text-sm text-neutral-400">None linked yet.</p>
+          )}
+          {relatedQuery.data?.map((r) => (
+            <Link
+              key={r.incident_id}
+              to={`/incidents/${r.incident_id}`}
+              className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {r.title ?? `Incident #${r.incident_id}`}
+              <span className="ml-2 text-xs text-neutral-400">{r.depth}-hop</span>
+            </Link>
+          ))}
+        </div>
+
+        {suggestedQuery.data && suggestedQuery.data.length > 0 && (
+          <div className="mt-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Suggested (by similarity)
+            </h4>
+            <div className="mt-1 flex flex-col gap-1">
+              {suggestedQuery.data.map((s) => (
+                <div key={s.incident_id} className="flex items-center gap-2 text-sm">
+                  <span>{s.title ?? `Incident #${s.incident_id}`}</span>
+                  <span className="text-xs text-neutral-400">
+                    {(s.similarity * 100).toFixed(0)}% similar
+                  </span>
+                  <button
+                    onClick={() => linkMutation.mutate(s.incident_id)}
+                    disabled={linkMutation.isPending}
+                    className="rounded border border-neutral-300 px-1.5 py-0.5 text-xs disabled:opacity-40 dark:border-neutral-700"
+                  >
+                    Link
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
