@@ -41,35 +41,38 @@ start of any new session — do not rely on conversational memory.
 - [x] Create docs/RESEARCH.md
 - [x] Create docs/ARCHITECTURE.md
 - [x] Create IMPLEMENTATION_CHECKLIST.md
-- [~] Commit research/planning milestone
+- [x] Commit research/planning milestone
 
 ## PHASE 1 — Architecture
-- [ ] Define modules & data flow
-- [ ] Define API boundaries
-- [ ] Define database schema (entities from Section 9 of the source spec)
-- [ ] Define retrieval pipeline (lexical + vector + exact + metadata + graph → fusion → rerank)
-- [ ] Define AI provider abstraction
-- [ ] Define embedding provider abstraction
-- [ ] Define attachment storage layout
-- [ ] Define backup/export archive format
-- [ ] Define MCP tool interface
-- [ ] Commit architecture
+- [x] Define modules & data flow — docs/ARCHITECTURE.md § 2-3
+- [x] Define API boundaries — docs/ARCHITECTURE.md § 2 (service layer shared by REST + MCP)
+- [x] Define database schema (entities from Section 9 of the source spec) — docs/ARCHITECTURE.md § 4
+- [x] Define retrieval pipeline (lexical + vector + exact + metadata + graph → fusion → rerank) — § 5
+- [x] Define AI provider abstraction — docs/ARCHITECTURE.md § 6
+- [x] Define embedding provider abstraction — docs/ARCHITECTURE.md § 6
+- [x] Define attachment storage layout — docs/ARCHITECTURE.md § 7
+- [x] Define backup/export archive format — docs/ARCHITECTURE.md § 8
+- [x] Define MCP tool interface — docs/ARCHITECTURE.md § 9
+- [x] Commit architecture (same commit as research)
 
 ## PHASE 2 — Database
-- [ ] SQLite setup (WAL mode, foreign keys on)
-- [ ] SQLAlchemy models
-- [ ] Alembic migrations wired up
-- [ ] Incident
-- [ ] Attempt
-- [ ] Environment
-- [ ] Project
-- [ ] Technology
-- [ ] Tag
-- [ ] Attachment
-- [ ] Relationship
-- [ ] Revision
-- [ ] AI/embedding provenance metadata
-- [ ] Model/migration tests
+- [x] SQLite setup (WAL mode, foreign keys on)
+    Result: app/db/session.py sets PRAGMA foreign_keys/journal_mode/busy_timeout on connect.
+- [x] SQLAlchemy models
+    Result: 17 mapped tables under backend/app/models/, SQLAlchemy 2.0 typed style, TYPE_CHECKING-guarded cross-file relationships (no circular imports).
+- [x] Alembic migrations wired up
+    Result: async env.py, batch mode mandatory, sqlalchemy.url sourced from app.core.config.Settings (one source of truth). Initial migration includes FTS5 virtual tables + sync triggers co-located with the incidents table DDL.
+- [x] Incident (+ raw_problem/raw_solution sacred fields, status/severity/confidence, needs_ai_review)
+- [x] Attempt (ordered, per-incident)
+- [x] Environment (one-to-one with Incident)
+- [x] Project / Technology / Tag (reference entities)
+- [x] Attachment (+ ExtractedText derived table)
+- [x] Command (first-class, copyable)
+- [x] Relationship tables — incident_technologies, incident_projects, incident_tags, incident_relations (typed, self-referencing), technology_relations
+- [x] Revision (versioned knowledge)
+- [x] AI/embedding provenance metadata — ExtractionProvenance, ChunkEmbedding
+- [x] Model/migration tests
+    Result: backend/tests/test_migrations.py (upgrade/downgrade round-trip, FTS5 insert/update/delete sync) + test_models.py (relationships, recursive knowledge-graph traversal, CHECK constraint). 7/7 passing, ruff clean.
 
 ## PHASE 3 — Backend
 - [ ] FastAPI app scaffold
