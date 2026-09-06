@@ -8,6 +8,7 @@ breakdown for explainability (Section 70).
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timing import log_duration
 from app.models.incident import Incident
 from app.schemas.search import SearchDegraded, SearchResponse, SearchResult, SearchSignals
 from app.services.embeddings.provider import get_embedding_provider
@@ -32,6 +33,14 @@ def _rank_normalize(hits: list[dict], key: str = "incident_id") -> dict[int, flo
 
 
 async def search_incidents(session: AsyncSession, query: str, limit: int = 20) -> SearchResponse:
+    """Section 54: durations are logged (never the query text itself)."""
+    with log_duration("search", query_len=len(query), limit=limit):
+        return await _search_incidents_impl(session, query, limit)
+
+
+async def _search_incidents_impl(
+    session: AsyncSession, query: str, limit: int
+) -> SearchResponse:
     lexical_hits = await search_lexical(session, query, limit=limit)
     trigram_ids = await search_trigram(session, query, limit=limit)
     attachment_hits = await search_attachment_text(session, query, limit=limit)

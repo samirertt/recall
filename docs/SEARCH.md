@@ -100,10 +100,24 @@ adding as a new fixture pair.
 
 ## Performance
 
-No formal load testing has been done yet (Phase 17 in
-IMPLEMENTATION_CHECKLIST.md). At this project's target scale (comfortably under
-10,000 incidents), lexical search is a single indexed FTS5 query and the vector scan
-is a NumPy matmul over a matrix that fits in memory (roughly 15MB at 10k incidents ×
-384 dimensions) — both are expected to be well within the <100ms/<500ms targets from
-Section 58 of the source spec, but this has not been measured end-to-end under
-realistic data volume.
+Measured (not just assumed) against Section 58's targets, at 1,000 synthetic
+incidents (each with a real embedding) on ordinary CPU hardware:
+
+| | mean | p50 | p95 | max | target |
+|---|---|---|---|---|---|
+| Lexical (`search_lexical`) | 0.9ms | 1.0ms | 1.1ms | 2.1ms | <100ms |
+| Hybrid (`search_incidents`) | 38.6ms | 38.3ms | 42.1ms | 66.9ms | <500ms |
+
+Both comfortably clear their targets with over an order of magnitude of headroom.
+Hybrid's cost is dominated by embedding the query text itself (one ONNX inference
+call) — the NumPy cosine scan over the vector matrix is negligible at this scale (a
+1000×384 float32 matrix is under 2MB). Re-embedding cost scales roughly linearly:
+seeding those 1,000 incidents (raw insert + embed) took ~72s total, or ~72ms/incident
+— rebuilding embeddings for a full 10,000-incident corpus would take on the order of
+12 minutes, consistent with docs/RESEARCH.md's "low minutes on CPU" estimate.
+
+Not yet measured: sustained concurrent load (multiple simultaneous requests), the
+attachment-text FTS signal at scale, or behavior with attachments/extraction running
+concurrently with search. The measurement script isn't part of the permanent test
+suite (too slow to run on every invocation) — see `scripts/` if you want to
+regenerate these numbers after a schema or ranking change.

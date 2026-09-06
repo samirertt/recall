@@ -136,6 +136,17 @@ needs to be distributed to someone who shouldn't need the source checked out.
 - **`git push` asks for a password and rejects it** — GitHub no longer accepts
   account passwords for git operations; use a Personal Access Token as the password,
   or switch the remote to SSH with a registered key.
+- **A logger stops producing output partway through a test run (or after an
+  in-process `alembic upgrade` call), with no error** — Alembic's `env.py` calls
+  `logging.config.fileConfig()`, whose default `disable_existing_loggers=True`
+  silently sets `.disabled = True` on every already-created logger not named in
+  `alembic.ini`'s logging config. Since migrations run on every test (via the
+  `configured_db` fixture) and inside `engkb import` when a schema upgrade is
+  needed, any application logger instantiated *before* that point loses all output
+  for the rest of the process. Fixed with `disable_existing_loggers=False` in
+  `backend/alembic/env.py` — if you add a new logger and its output mysteriously
+  vanishes only when run alongside other tests (never in isolation), this is almost
+  certainly why.
 - **Alembic autogenerate misses a change, or a migration touching a column
   type/constraint fails** — SQLite has almost no native `ALTER TABLE` support;
   `render_as_batch=True` is already set in `backend/alembic/env.py`, but always

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timing import log_duration
 from app.models.attachment import Attachment, ExtractedText
 from app.models.enums import ExtractionStatus
 from app.services.attachments.extraction import ExtractionResult, extract_text_attachment
@@ -40,7 +41,8 @@ async def add_attachment(
     await session.flush()
 
     try:
-        result = extract_text_attachment(filename, data)
+        with log_duration("extract_attachment", attachment_id=attachment.id, size_bytes=len(data)):
+            result = extract_text_attachment(filename, data)
     except Exception as exc:  # extractor contract says it won't raise — don't trust blindly
         result = ExtractionResult(
             status=ExtractionStatus.failed,

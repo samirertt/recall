@@ -12,8 +12,18 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
+#
+# disable_existing_loggers=False: fileConfig()'s default (True) silently sets
+# `.disabled = True` on every already-created logger not named in alembic.ini's
+# logging config — including our own app.perf / app.services.* loggers, the moment
+# they've been instantiated once (e.g. by an earlier test in the same process).
+# This is called on every migration run (every test, via the `configured_db`
+# fixture), so without this flag the *second* test to touch a given logger name
+# would silently lose all its log output for the rest of the process — caught by
+# test_perf_observability.py failing only when run alongside other tests, never in
+# isolation.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Single source of truth for the DB path: app.core.config.Settings, not a second
 # copy of the connection string in alembic.ini.

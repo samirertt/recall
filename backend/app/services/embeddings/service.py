@@ -13,6 +13,7 @@ import numpy as np
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timing import log_duration
 from app.models.embedding import ChunkEmbedding
 from app.models.incident import Attempt, Incident
 from app.services.embeddings.provider import EmbeddingProvider, get_embedding_provider
@@ -68,11 +69,12 @@ async def embed_incident(
     if provider is None:
         return False
 
-    attempts_result = await session.execute(
-        select(Attempt).where(Attempt.incident_id == incident.id).order_by(Attempt.order)
-    )
-    text = compose_incident_text(incident, attempts_result.scalars().all())
-    vector = provider.embed_document(text)
+    with log_duration("embed_incident", incident_id=incident.id):
+        attempts_result = await session.execute(
+            select(Attempt).where(Attempt.incident_id == incident.id).order_by(Attempt.order)
+        )
+        text = compose_incident_text(incident, attempts_result.scalars().all())
+        vector = provider.embed_document(text)
 
     await session.execute(
         delete(ChunkEmbedding).where(
