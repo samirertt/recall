@@ -84,15 +84,19 @@ start of any new session — do not rely on conversational memory.
 - [x] Configuration (env-based, local-first defaults) — backend/app/core/config.py (pydantic-settings, ENGMEM_ prefix)
 - [x] Health/doctor endpoint — GET /health (DB path, FTS5 availability, AI/embedding config); full `engkb doctor` richness is Phase 13
 - [x] Backend tests
-    Result: backend/tests/test_api_incidents.py, test_api_search.py, test_api_health.py — httpx ASGITransport against the real app. 17/17 passing overall, ruff clean. Manually smoke-tested via a real `uvicorn` process (capture → lexical search round-trip confirmed).
+    Result: backend/tests/test_api_incidents.py, test_api_search.py, test_api_health.py, test_attachments.py — httpx ASGITransport against the real app. 23/23 passing overall, ruff clean. Manually smoke-tested via a real `uvicorn` process (capture → lexical search round-trip confirmed).
 
 ## PHASE 4 — Frontend
-- [ ] Vite + React + TS + Tailwind scaffold
-- [ ] Routing (dashboard / search / incident detail / projects / technologies / graph / settings)
-- [ ] API client / data fetching
-- [ ] Dashboard view
-- [ ] Incident detail view
-- [ ] Search view
+- [x] Vite + React + TS + Tailwind scaffold
+    Result: `frontend/` — Vite 8.2.2, React 19.2.8, TypeScript 6.0.2, Tailwind CSS 4.3.3 (CSS-first `@theme` config, `@tailwindcss/vite` plugin) — versions match docs/RESEARCH.md § Frontend Stack exactly.
+- [~] Routing (dashboard / search / incident detail / projects / technologies / graph / settings)
+    Result: two routes only — home (search + capture + recent list, combined rather than a separate dashboard) and incident detail. Projects/technologies/graph/settings views don't exist yet (no backend list endpoints for the first two either — see Phase 3's open item). Used plain `react-router-dom` v7 rather than the TanStack Router recommended in docs/RESEARCH.md — a deliberate MVP simplification (no typed search-params or route loaders needed yet for two routes); revisit if/when route count and filter complexity grow.
+- [x] API client / data fetching — `frontend/src/lib/api.ts` (typed fetch wrapper, mirrors backend/app/schemas) + TanStack Query 5.102.8 for server state, matching docs/RESEARCH.md § Frontend Stack
+- [~] Dashboard view — folded into the home page (search bar + capture form + recent incidents list) rather than a separate view; no stats/recurring-problem widgets yet (that's Section 47/Phase 45, not started)
+- [x] Incident detail view — full fields (problem/solution/root cause/solution/why-it-worked/lesson/environment/attempts), inline edit form, archive button, attachment list + upload
+- [x] Search view — folded into the home page; live results with relevance score, per-signal badges (lexical/substring/attachment), highlighted snippets, and an honest "semantic search not available" banner (matches the `degraded` field rather than hiding it)
+- [x] Keyboard shortcuts (partial) — Cmd/Ctrl+K focuses search, Cmd/Ctrl+N focuses the capture form, Cmd/Ctrl+Enter saves. Command palette (Section 50) not built yet.
+- [x] Manually verified in a real browser (not just `tsc`/build passing): capture → detail-page navigation → edit → save → home → search → result-click round trip, screenshot-verified at each step, zero console errors. `tsc -b` and `vite build` both pass cleanly.
 
 ## PHASE 5 — Incident Capture
 - [x] Zero-friction "New Incident" (problem + solution + attach, nothing else required)
@@ -237,7 +241,8 @@ start of any new session — do not rely on conversational memory.
 ---
 
 ## Known limitations / open items
-- No frontend yet (Phase 4 not started) — everything so far is verified via the API/pytest (23/23 passing) and manual curl/upload smoke tests against a real `uvicorn` process.
+- Frontend has no tests (no Vitest/Playwright yet) — verified only by manual browser interaction this session (screenshots + console-error check) plus `tsc -b`/`vite build` passing. No frontend duplicate-detection UI, no attachment viewer beyond a raw download link, no graph visualization, no command palette.
+- Frontend uses plain `react-router-dom` v7, not TanStack Router as docs/RESEARCH.md recommends — a deliberate MVP simplification for two routes; revisit before adding typed/filterable search-param-heavy routes.
 - No embeddings/vector search (Phase 8), real hybrid score fusion (Phase 9), AI enrichment (Phase 10), knowledge-graph write paths beyond the DB layer (Phase 11 traversal exists, but no API/UI to create relations yet), MCP/Claude Code integration (Phase 12), CLI (Phase 13), or backup/import (Phase 14).
 - Duplicate detection (Section 22) is backend-only right now (`possible_duplicates` on incident creation) — no UI to act on it.
 - Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH.
@@ -245,8 +250,8 @@ start of any new session — do not rely on conversational memory.
 - `git push` is not possible from this sandboxed dev environment (no HTTPS credential helper or registered SSH key for the `origin` remote) — commits are local only until the user pushes them or authorizes the environment.
 
 ## Next actions
-1. Phase 4 — Frontend: Vite/React/Tailwind scaffold, capture form, search view, incident detail view (docs/RESEARCH.md § Frontend Stack for exact versions).
-2. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
-3. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
-4. Phase 14 — Backup/export/import.
+1. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
+2. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
+3. Phase 14 — Backup/export/import.
+4. Frontend polish: projects/technologies list endpoints + UI, attachment viewer, graph visualization, frontend test coverage.
 _(updated as work proceeds)_

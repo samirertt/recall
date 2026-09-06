@@ -11,8 +11,8 @@ It is not a notes app, and it is not a thin wrapper around
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reasoning; the short version
 is in [Why it exists](#why-it-exists) below.
 
-> **Status**: early, backend-only. Capture, editing, attachments (with text/PDF/OCR
-> extraction), and lexical search all work end-to-end today. There is no frontend, no
+> **Status**: early. Capture, editing, attachments (with text/PDF/OCR extraction),
+> lexical search, and a working browser UI all work end-to-end today. There is no
 > semantic/embedding search, no AI enrichment, and no Claude Code integration yet.
 > See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for exactly what's
 > done, what's in progress, and what's next — it's kept up to date after every
@@ -70,12 +70,15 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
   matched. Arbitrary user queries are safe against FTS5 query-syntax injection.
 - **Possible-duplicate hints** — every new incident is checked against existing ones
   and surfaces close lexical matches (never auto-merged).
+- **A working browser UI** — capture, quick-capture, search with relevance/signal
+  breakdown and highlighted snippets, incident detail view (edit, attach, archive) —
+  see [Quick start](#quick-start).
 
 ## What's not built yet
 
-Semantic/hybrid search, AI-based enrichment (title/root-cause/tag extraction), a
-frontend, the knowledge graph's write-side API, MCP/Claude Code integration, the CLI,
-and backup/export/import. All of these are researched and architected already (see the
+Semantic/hybrid search, AI-based enrichment (title/root-cause/tag extraction), the
+knowledge graph's write-side API, MCP/Claude Code integration, the CLI, and
+backup/export/import. All of these are researched and architected already (see the
 docs above) — they're sequenced in
 [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
@@ -112,13 +115,26 @@ brew install tesseract
 
 ## Quick start
 
-Run the API:
+**Backend** (terminal 1):
 
 ```bash
 uv run uvicorn app.main:app --app-dir backend --reload
 ```
 
-Then, from another terminal:
+**Frontend** (terminal 2, first time only needs `npm install`):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173` — the dev server proxies `/api/*` to the backend on port
+8000 (see `frontend/vite.config.ts`), so both must be running. From there: type a
+problem into the capture form, save it, then search for it (`Ctrl/Cmd+K` focuses
+search from anywhere, `Ctrl/Cmd+N` focuses the capture form).
+
+Or drive the API directly:
 
 ```bash
 # Capture an incident — only raw_problem is required
@@ -205,8 +221,10 @@ Until then: the entire canonical state is `data/engineering.db` plus
 
 ## Development
 
+Backend:
+
 ```bash
-uv sync                          # install/update dependencies
+uv sync                          # install/update dependencies (Python 3.13, all groups)
 uv run alembic upgrade head      # apply migrations to data/engineering.db
 uv run uvicorn app.main:app --app-dir backend --reload   # run the API
 uv run pytest backend/tests -v   # run the test suite
@@ -217,6 +235,18 @@ uv run ruff check backend --fix  # lint, auto-fixing what's safe
 Tests spin up a real temporary SQLite database per test and run the actual Alembic
 migration chain against it (not a `create_all()` shortcut), so migration correctness
 is exercised on every run, not just when someone remembers to test it separately.
+
+Frontend:
+
+```bash
+cd frontend
+npm install         # first time, or after pulling dependency changes
+npm run dev         # dev server at http://127.0.0.1:5173, proxies /api to the backend
+npm run build        # type-checks (tsc -b) then produces a production build in dist/
+```
+
+There is no frontend test suite yet (see IMPLEMENTATION_CHECKLIST.md's open items) —
+changes are currently verified by running the dev server and checking in a browser.
 
 Project layout:
 
@@ -231,6 +261,11 @@ backend/
     services/   # business logic, shared by the REST API and (later) MCP
   alembic/      # migrations — batch mode mandatory (SQLite ALTER TABLE limitations)
   tests/
+frontend/
+  src/
+    lib/api.ts      # typed fetch client, mirrors backend/app/schemas
+    components/     # SearchBar, CaptureForm, ResultCard
+    pages/          # HomePage (search + capture + recent list), IncidentDetailPage
 data/           # gitignored: engineering.db, attachments/, embeddings/, indexes/
 docs/
   RESEARCH.md      # decision record: what was chosen, alternatives, tradeoffs, why
