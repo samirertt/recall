@@ -109,7 +109,7 @@ start of any new session — do not rely on conversational memory.
 - [x] Environment capture — PATCH `environment` field (one environment per incident)
 - [x] Project association — PATCH `project_names` (get-or-create by name)
 - [x] Tags / technology association — PATCH `tag_names` / `technology_names` (get-or-create by name)
-- [ ] Basic duplicate-detection UX surfaced in a frontend (backend already returns `possible_duplicates` on create — Section 22 — but there's no UI yet since Phase 4 hasn't started)
+- [ ] Basic duplicate-detection UX surfaced in a frontend — the backend returns `possible_duplicates` on create (Section 22) and the frontend exists (Phase 4), but `CaptureForm`/`HomePage` don't currently read or display that field. A real, if small, remaining gap — not blocked on anything anymore.
 
 ## PHASE 6 — Attachments
 - [x] Upload endpoint — POST /incidents/{id}/attachments (multipart), 413 on >25MB
@@ -119,8 +119,8 @@ start of any new session — do not rely on conversational memory.
 - [x] PDF text extraction — PyMuPDF primary, pypdf fallback, per-page OCR fallback for image-only pages
 - [x] OCR for screenshots — Tesseract via pytesseract (grayscale/upscale/dark-mode-invert preprocessing); genuinely tested degrading gracefully in this dev environment, which has no Tesseract binary installed
 - [x] Extracted text feeds search without altering originals — separate `extracted_texts_fts` FTS5 index (migration d21505cad1e4), original attachment bytes never touched
-- [ ] Attachment viewer (frontend) — blocked on Phase 4 (no frontend yet)
-- [ ] Integrity checks (missing/orphaned files) — deferred to Phase 13's `engkb doctor`
+- [~] Attachment viewer (frontend) — the incident detail page lists attachments with a working download link (Phase 4/11); no inline preview (images/PDFs rendered in-page) or extracted-text display yet, so "viewer" is currently just "list + download."
+- [x] Integrity checks (missing/orphaned files) — `engkb doctor` (Phase 13) checks every attachment DB row against the actual file on disk and reports missing files by count
 
 ## PHASE 7 — Search (Lexical)
 - [x] FTS5 virtual table + sync triggers (built in Phase 2's migration; see there)
@@ -149,7 +149,7 @@ start of any new session — do not rely on conversational memory.
 - [x] Score fusion (configurable, documented formula) — weighted-linear fusion (app/services/retrieval/fusion.py), pure functions unit-tested in isolation (test_fusion.py), auto-renormalizes when the vector signal is unavailable
 - [ ] Reranking — deliberately deferred per docs/RESEARCH.md (not justified at this scale); architecture leaves room for a pluggable post-fusion stage
 - [x] "Why this ranked highly" explanation — every result carries a per-signal breakdown + the `weights_profile` id that produced it
-- [ ] Retrieval benchmark harness — the ~150-250-incident labeled benchmark from docs/RESEARCH.md § Retrieval Evaluation is not built; only ad hoc integration tests exist so far
+- [x] Retrieval benchmark harness — built in Phase 15 (`backend/tests/test_retrieval_eval.py`); smaller than docs/RESEARCH.md's ~150-250-incident recommendation (~32 incidents) but real and gated, and caught a genuine Phase 7 bug (see Phase 15's entry below)
 
 ## PHASE 10 — AI Enrichment
 - [x] Title generation — via whichever AIProvider is active; heuristic (first line) by default in this environment (no API key configured)
@@ -253,32 +253,78 @@ start of any new session — do not rely on conversational memory.
 - [x] Documentation pass — docs/SEARCH.md, docs/BACKUP_AND_MIGRATION.md, docs/CLAUDE_CODE.md, docs/DEVELOPMENT.md all written (Phase 12/14/16); README kept current after every phase; this checklist itself is the continuously-updated record
 
 ## PHASE 19 — Final Validation
-- [ ] Full scenario: create → structure → store → attach → embed → index → search → retrieve → Claude synthesis → edit → export → delete local copy → import → rebuild → search again
-- [ ] Acceptance test: Jetson/CUDA/PyTorch example (Section 76)
-- [ ] Acceptance test: portability/export-import (Section 77)
-- [ ] Acceptance test: AI failure tolerance (Section 78)
-- [ ] Acceptance test: vector index failure/rebuild (Section 79)
-- [ ] Acceptance test: Claude Code retrieval (Section 80)
+- [x] Full scenario: create → structure → store → attach → embed → index → search → retrieve → Claude synthesis → edit → export → delete local copy → import → rebuild → search again
+    Result: no single test walks literally every step in one function, but every step is covered by an existing test and the full chain has been run manually end-to-end via a real browser + real `uvicorn` process at multiple points this build (Phases 4, 6, 8/9, 11, 18). `test_backup.py`'s round-trip test covers store→attach→export→delete→import→rebuild→search; `test_final_acceptance.py` covers create→structure→search→retrieve→(synthesis-ready detail).
+- [x] Acceptance test: Jetson/CUDA/PyTorch example (Section 76)
+    Result: `backend/tests/test_final_acceptance.py::test_section76_jetson_cuda_pytorch_acceptance` — creates the exact incident, structures it (environment/failed attempt/why-it-worked), confirms it's retrievable by the exact query text from Section 57 **and** ranks above a deliberately-similar-but-unrelated desktop-GPU incident that also mentions CUDA, and confirms every fact needed for Claude's synthesis format (§32) is present on the detail response.
+- [x] Acceptance test: portability/export-import (Section 77)
+    Result: `test_backup.py::test_full_export_delete_import_rebuild_search_round_trip` — export, genuinely delete the live DB and every attachment file, import, rebuild embeddings, confirm lexical **and** attachment-text search both still find the incident.
+- [x] Acceptance test: AI failure tolerance (Section 78)
+    Result: `test_final_acceptance.py::test_section78_ai_provider_failure_tolerance` — a provider whose `extract()` always raises; incident still saves (201) and is still findable via search.
+- [x] Acceptance test: vector index failure/rebuild (Section 79)
+    Result: `test_final_acceptance.py::test_section79_vector_index_loss_and_rebuild` — deletes an incident's `ChunkEmbedding` rows directly (simulating index loss), confirms canonical incident data is completely unaffected and the incident is no longer found via the vector signal specifically, then confirms `rebuild_embeddings()` restores it.
+- [x] Acceptance test: Claude Code retrieval (Section 80)
+    Result: `test_mcp_server.py` (the authoritative version — a real subprocess over stdio driven by the actual MCP client SDK) plus `test_final_acceptance.py::test_section80_claude_code_retrieval_shape` (a lighter structural check that environment-comparison data is present on the response shape an MCP tool call returns).
 
 ---
 
 ## Known limitations / open items
-- Frontend has no tests (no Vitest/Playwright yet) — verified only by manual browser interaction this session (screenshots + console-error check) plus `tsc -b`/`vite build` passing. No frontend duplicate-detection UI, no attachment viewer beyond a raw download link, no force-directed graph visualization, no command palette.
-- Frontend uses plain `react-router-dom` v7, not TanStack Router as docs/RESEARCH.md recommends — a deliberate MVP simplification for two routes; revisit before adding typed/filterable search-param-heavy routes.
-- Duplicate detection (Section 22) is backend-only right now (`possible_duplicates` on incident creation) — no UI to act on it.
-- Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH. Technology↔technology relationships have no API/UI (data model only).
-- Tesseract OCR is genuinely unavailable in this dev environment (no system binary installed) — verified this degrades correctly (attachment still saves, extraction recorded as `failed`) rather than assuming it. Install `tesseract-ocr` to exercise the real OCR path.
-- Claude/OpenAI AI enrichment adapters are implemented per current SDK APIs but **not exercised against a live API** (no key in this sandbox) — only provider selection/fallback is tested.
-- MCP server is verified via a real subprocess + the real client SDK, but **not registered against a live `claude` CLI** (none installed in this sandbox).
-- No retrieval benchmark harness (docs/RESEARCH.md § Retrieval Evaluation's ~150-250-incident labeled corpus) — only ad hoc integration tests exercise ranking quality so far. Phase 15/19 item.
-- Metadata/environment-aware filtering is not exposed on `GET /search` (Phase 7/9 item); no dedicated exact-identifier-extraction subsystem (trigram is a partial stand-in).
-- `git push` requires a token/credential supplied by the user in this sandboxed dev environment (no ambient credential helper or registered SSH key) — see chat history for how this session did it; not persisted anywhere in the repo.
+
+_All 20 phases (0-19) now have at least a first working pass — see each phase's
+section above for what's genuinely done vs. simplified. This list is what's actually
+still open, not a phase-by-phase status (that's above)._
+
+- Frontend has no automated tests (no Vitest/Playwright) — verified by manual browser
+  interaction (screenshots + console-error checks) plus `tsc -b`/`vite build` passing
+  at every milestone, not by an automated suite.
+- Frontend uses plain `react-router-dom` v7, not TanStack Router as docs/RESEARCH.md
+  recommends — a deliberate simplification for two routes; revisit before adding
+  typed/filterable search-param-heavy routes.
+- No force-directed knowledge-graph visualization (`react-force-graph`, per
+  docs/RESEARCH.md) — relationships are a simple list on the incident detail page.
+- Duplicate detection (Section 22) surfaces `possible_duplicates` in the API but has
+  no dedicated UI to act on a duplicate hint beyond what's already visible.
+- Projects/Technologies/Tags have no standalone list/rename endpoints — only
+  get-or-create-by-name via incident PATCH. Technology↔technology relationships have
+  no API/UI (data model only, from Phase 2).
+- No dedicated exact-identifier-extraction subsystem (an `incident_identifiers`
+  table + regex library + ranking short-circuit) — the trigram substring signal is a
+  partial stand-in. Metadata/environment-aware filtering isn't exposed as query
+  parameters on `GET /search` either.
+- Retrieval benchmark corpus is ~32 incidents, not docs/RESEARCH.md's recommended
+  ~150-250 — growing it is pure YAML data entry, no harness changes needed.
+- Tesseract OCR is genuinely unavailable in this dev environment (no system binary
+  installed) — verified this degrades correctly (attachment still saves, extraction
+  recorded `failed`) rather than assumed. Install `tesseract-ocr` to exercise the
+  real OCR path; there's no "reprocess failed extractions" command yet either.
+- Claude/OpenAI AI enrichment adapters are implemented per current SDK APIs but
+  **not exercised against a live API** (no key available in this sandbox) — only
+  provider selection/fallback logic is tested against a real key requirement.
+- MCP server is verified via a real subprocess + the real client SDK, but **not
+  registered against a live `claude` CLI** (none installed in this sandbox).
+- No accessibility audit beyond a light `aria-label` pass (no screen-reader testing,
+  no systematic contrast/focus-trap review).
+- No background job queue — embedding/AI enrichment/extraction are all best-effort
+  inline steps after the synchronous save, not a separate worker process. Fine at
+  personal scale; would need revisiting under sustained concurrent load.
+- `git push` from this sandboxed dev environment needed a token supplied directly by
+  the user in chat (no ambient credential helper or registered SSH key) — used
+  transiently via an environment variable for each push, never written to disk or
+  committed.
 
 ## Next actions
-1. Phase 15 — Retrieval benchmark harness (Section 56/57's labeled corpus + P@K/Recall@K/MRR).
-2. Phase 16 — Security review pass (upload validation, path traversal, secret handling — much of this exists already; needs a dedicated audit pass).
-3. Phase 17 — Performance measurement against the stated targets (<100ms lexical, <500ms hybrid).
-4. Phase 18 — UX polish (command palette, remaining keyboard shortcuts, accessibility pass).
-5. Phase 19 — Full acceptance-scenario run-through and final validation writeup.
-6. Frontend polish: projects/technologies list endpoints + UI, attachment viewer, force-directed graph visualization, frontend test coverage.
+
+Roughly in priority order, none blocking — the system is fully functional end-to-end
+today:
+
+1. Grow the retrieval benchmark corpus toward docs/RESEARCH.md's ~150-250 target as
+   real usage surfaces near-miss queries worth adding.
+2. Verify the Claude/OpenAI AI enrichment adapters against a real API key; verify
+   MCP registration against a live `claude mcp add`.
+3. Build the exact-identifier-extraction subsystem + expose metadata/environment
+   filters on `GET /search` (the two concrete Phase 7/9 gaps).
+4. Frontend: projects/technologies list endpoints + UI, a real attachment viewer,
+   force-directed graph visualization, and an automated test suite (Vitest/Playwright).
+5. A background job queue if/when inline best-effort embedding/AI calls become a
+   noticeable per-request latency source under real usage.
 _(updated as work proceeds)_
