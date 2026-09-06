@@ -194,24 +194,26 @@ start of any new session — do not rely on conversational memory.
 - [ ] Registration against a live `claude` CLI — **not tested**: no `claude` binary is installed in this dev sandbox. The `claude mcp add`/`claude mcp list` commands in docs/CLAUDE_CODE.md are per current official docs but unverified end-to-end here.
 
 ## PHASE 13 — CLI
-- [ ] `engkb search`
-- [ ] `engkb add`
-- [ ] `engkb quick-add`
-- [ ] `engkb incident <id>`
-- [ ] `engkb list`
-- [ ] `engkb export`
-- [ ] `engkb import`
-- [ ] `engkb rebuild-index`
-- [ ] `engkb rebuild-embeddings`
-- [ ] `engkb doctor`
+- [x] `engkb search` (`scripts/engkb search "<query>"`, shows relevance % + which signals matched)
+- [x] `engkb add` (`--problem`/`--solution` flags, or interactive prompts)
+- [x] `engkb quick-add` (positional arg or stdin)
+- [x] `engkb incident <id>`
+- [x] `engkb list` (`--status`, `--limit`)
+- [x] `engkb export <path.zip>`
+- [x] `engkb import <path.zip>`
+- [x] `engkb rebuild-index` — new: `rebuild_fts_index()` (Section 41's "Rebuild FTS Index," not previously implemented)
+- [x] `engkb rebuild-embeddings`
+- [x] `engkb doctor` — DB path/existence, FTS5 availability, embedding/AI provider status, integrity check, row counts, orphaned-attachment check
+    Result: `backend/app/cli.py` (Typer), wrapped by `scripts/engkb`. Manually run end-to-end for every command; also covered by `backend/tests/test_cli.py` (Typer `CliRunner`, genuinely invoking each command's own `asyncio.run` path, not just calling service functions directly) — caught and fixed a real bug (a raw `zipfile.BadZipFile` wasn't wrapped as `BackupError`, so `engkb import` on a garbage file crashed instead of reporting failure cleanly).
 
 ## PHASE 14 — Backup / Import / Export
-- [ ] Export (manifest.json + db + attachments + embeddings + indexes → zip)
-- [ ] Checksums
-- [ ] Import with validation
-- [ ] Schema-version migration on import
-- [ ] Rebuild incompatible derived indexes on import
-- [ ] Backup/restore tests
+- [x] Export (manifest.json + db + attachments → zip; embeddings/indexes deliberately excluded per docs/RESEARCH.md — rebuilding is cheaper/safer than restoring a possibly-ABI-mismatched binary index)
+- [x] Checksums — sha256 of core.db and every attachment, content-addressed inside the archive
+- [x] Import with validation — fail-closed order: zip integrity → manifest version → checksums → DB integrity_check → schema-revision compatibility, all before touching the live DB
+- [x] Schema-version migration on import — an older archive is upgraded (against the *extracted* copy, never the live DB, before it's swapped into place); a revision this app build doesn't recognize is refused outright
+- [x] Rebuild incompatible derived indexes on import — derived indexes are never in the archive to begin with, so this is unconditional: `engkb rebuild-index`/`rebuild-embeddings` after every import
+- [x] Backup/restore tests
+    Result: `backend/tests/test_backup.py` — valid-export shape, content-addressed attachments, tampered-checksum rejection, future-manifest-version rejection, and the **full Section 77 acceptance scenario** (export → delete live DB + attachments entirely → import → rebuild embeddings → lexical search finds the incident → attachment-text search finds it too). All passing.
 
 ## PHASE 15 — Testing
 - [ ] Unit tests (models, validation, parsing, extraction, search, ranking, relationships, import/export)
@@ -249,17 +251,22 @@ start of any new session — do not rely on conversational memory.
 ---
 
 ## Known limitations / open items
-- Frontend has no tests (no Vitest/Playwright yet) — verified only by manual browser interaction this session (screenshots + console-error check) plus `tsc -b`/`vite build` passing. No frontend duplicate-detection UI, no attachment viewer beyond a raw download link, no graph visualization, no command palette.
+- Frontend has no tests (no Vitest/Playwright yet) — verified only by manual browser interaction this session (screenshots + console-error check) plus `tsc -b`/`vite build` passing. No frontend duplicate-detection UI, no attachment viewer beyond a raw download link, no force-directed graph visualization, no command palette.
 - Frontend uses plain `react-router-dom` v7, not TanStack Router as docs/RESEARCH.md recommends — a deliberate MVP simplification for two routes; revisit before adding typed/filterable search-param-heavy routes.
-- No embeddings/vector search (Phase 8), real hybrid score fusion (Phase 9), AI enrichment (Phase 10), knowledge-graph write paths beyond the DB layer (Phase 11 traversal exists, but no API/UI to create relations yet), MCP/Claude Code integration (Phase 12), CLI (Phase 13), or backup/import (Phase 14).
 - Duplicate detection (Section 22) is backend-only right now (`possible_duplicates` on incident creation) — no UI to act on it.
-- Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH.
+- Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH. Technology↔technology relationships have no API/UI (data model only).
 - Tesseract OCR is genuinely unavailable in this dev environment (no system binary installed) — verified this degrades correctly (attachment still saves, extraction recorded as `failed`) rather than assuming it. Install `tesseract-ocr` to exercise the real OCR path.
-- `git push` is not possible from this sandboxed dev environment (no HTTPS credential helper or registered SSH key for the `origin` remote) — commits are local only until the user pushes them or authorizes the environment.
+- Claude/OpenAI AI enrichment adapters are implemented per current SDK APIs but **not exercised against a live API** (no key in this sandbox) — only provider selection/fallback is tested.
+- MCP server is verified via a real subprocess + the real client SDK, but **not registered against a live `claude` CLI** (none installed in this sandbox).
+- No retrieval benchmark harness (docs/RESEARCH.md § Retrieval Evaluation's ~150-250-incident labeled corpus) — only ad hoc integration tests exercise ranking quality so far. Phase 15/19 item.
+- Metadata/environment-aware filtering is not exposed on `GET /search` (Phase 7/9 item); no dedicated exact-identifier-extraction subsystem (trigram is a partial stand-in).
+- `git push` requires a token/credential supplied by the user in this sandboxed dev environment (no ambient credential helper or registered SSH key) — see chat history for how this session did it; not persisted anywhere in the repo.
 
 ## Next actions
-1. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
-2. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
-3. Phase 14 — Backup/export/import.
-4. Frontend polish: projects/technologies list endpoints + UI, attachment viewer, graph visualization, frontend test coverage.
+1. Phase 15 — Retrieval benchmark harness (Section 56/57's labeled corpus + P@K/Recall@K/MRR).
+2. Phase 16 — Security review pass (upload validation, path traversal, secret handling — much of this exists already; needs a dedicated audit pass).
+3. Phase 17 — Performance measurement against the stated targets (<100ms lexical, <500ms hybrid).
+4. Phase 18 — UX polish (command palette, remaining keyboard shortcuts, accessibility pass).
+5. Phase 19 — Full acceptance-scenario run-through and final validation writeup.
+6. Frontend polish: projects/technologies list endpoints + UI, attachment viewer, force-directed graph visualization, frontend test coverage.
 _(updated as work proceeds)_

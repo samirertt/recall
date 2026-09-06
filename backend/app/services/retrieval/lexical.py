@@ -97,3 +97,13 @@ async def search_attachment_text(session: AsyncSession, query: str, limit: int =
         _ATTACHMENT_TEXT_SQL, {"match_query": match_query, "limit": limit}
     )
     return [{"incident_id": row.incident_id, "snippet": row.snippet} for row in result.fetchall()]
+
+
+async def rebuild_fts_index(session: AsyncSession) -> None:
+    """The `rebuild-index` maintenance command (Section 37/41): regenerates all three
+    FTS5 tables from canonical data via FTS5's built-in `'rebuild'` command. Always
+    safe — these tables hold zero data that isn't reconstructible from `incidents` /
+    `extracted_texts` (docs/RESEARCH.md § SQLite & FTS5)."""
+    for table in ("incidents_fts", "incidents_fts_trigram", "extracted_texts_fts"):
+        await session.execute(text(f"INSERT INTO {table}({table}) VALUES('rebuild')"))
+    await session.commit()

@@ -11,12 +11,13 @@ It is not a notes app, and it is not a thin wrapper around
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reasoning; the short version
 is in [Why it exists](#why-it-exists) below.
 
-> **Status**: early. Capture, editing, attachments (with text/PDF/OCR extraction),
-> hybrid search (lexical + semantic + relationship expansion), and a working browser
-> UI all work end-to-end today. There is no AI-based enrichment and no Claude Code
-> integration yet. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for
-> exactly what's done, what's in progress, and what's next — it's kept up to date
-> after every milestone, not written once and forgotten.
+> **Status**: every phase of the original spec has at least a first working pass —
+> capture, editing, attachments (text/PDF/OCR), AI enrichment, hybrid search (lexical
+> + semantic + relationship expansion), a browser UI, a CLI, backup/restore, and an
+> MCP server for Claude Code all work end-to-end today, backed by 60 passing tests.
+> See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for exactly what's
+> done, what's simplified vs. the original research, and what's still open — it's
+> kept up to date after every milestone, not written once and forgotten.
 
 ---
 
@@ -89,9 +90,11 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## What's not built yet
 
-The CLI and backup/export/import. Both are researched and architected already (see
-the docs above) — sequenced in
-[IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
+A retrieval evaluation benchmark, a dedicated security/performance audit pass, a
+force-directed knowledge-graph visualization, and a command palette. See
+[IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for the exhaustive,
+continuously-updated list — every phase of the original spec has at least a first
+pass implemented at this point.
 
 ---
 
@@ -231,14 +234,40 @@ the full tool list. Verified end-to-end by launching it as a real subprocess and
 driving it with the actual MCP client SDK (`backend/tests/test_mcp_server.py`) — not
 yet registered against a live `claude` CLI (none is installed in this dev sandbox).
 
+## CLI
+
+`scripts/engkb` works independently of the web UI:
+
+```bash
+scripts/engkb add --problem "..." --solution "..."   # or run with no flags to be prompted
+scripts/engkb quick-add < paste.txt                   # or: echo "..." | scripts/engkb quick-add
+scripts/engkb search "CUDA out of memory"
+scripts/engkb list --status unresolved
+scripts/engkb incident 42
+scripts/engkb export backup-2026-09-06.zip
+scripts/engkb import backup-2026-09-06.zip
+scripts/engkb rebuild-index          # FTS5, from canonical text
+scripts/engkb rebuild-embeddings     # vector index, from canonical text
+scripts/engkb doctor                 # DB/FTS5/embedding/AI health, integrity check
+```
+
 ## Backup
 
-Not built yet (Phase 14). The planned format (a zip with `manifest.json`, a
-`VACUUM INTO`-produced SQLite snapshot, and content-addressed attachments; derived
-indexes excluded by default and rebuilt on import) is specified in
+`scripts/engkb export <path.zip>` produces a portable archive: `manifest.json`
+(schema revision, checksums, row counts) + a `VACUUM INTO`-produced SQLite snapshot +
+content-addressed attachments. Embeddings and the FTS5 index are deliberately
+excluded — rebuilding them after import is cheaper and safer than restoring a binary
+index that might not match the importing machine's SQLite/extension build. Full
+design in
 [docs/RESEARCH.md § Backup, Portability & Migrations](docs/RESEARCH.md#backup-portability--migrations).
-Until then: the entire canonical state is `data/engineering.db` plus
-`data/attachments/` — copying both is a manual but complete backup.
+
+`scripts/engkb import <path.zip>` is fail-closed: it verifies the zip's own integrity,
+the manifest version, every checksum, and schema compatibility — all before touching
+your live database — then migrates the imported copy to the current schema if needed.
+Run `rebuild-index` and `rebuild-embeddings` afterward. This whole round trip
+(export → delete the local DB and attachments entirely → import → rebuild → search)
+is exercised as an automated test, not just described —
+`backend/tests/test_backup.py::test_full_export_delete_import_rebuild_search_round_trip`.
 
 ## Development
 
@@ -251,6 +280,7 @@ uv run uvicorn app.main:app --app-dir backend --reload   # run the API
 uv run pytest backend/tests -v   # run the test suite
 uv run ruff check backend        # lint
 uv run ruff check backend --fix  # lint, auto-fixing what's safe
+uv run ruff check backend mcp_server  # lint everything, including the MCP server
 ```
 
 Tests spin up a real temporary SQLite database per test and run the actual Alembic
@@ -279,7 +309,8 @@ backend/
     db/         # engine/session construction, lazily built (test-friendly)
     models/     # SQLAlchemy 2.0 models — the canonical schema
     schemas/    # Pydantic request/response models — kept separate from models/ on purpose
-    services/   # business logic, shared by the REST API and MCP server
+    services/   # business logic, shared by the REST API, CLI, and MCP server
+    cli.py      # `engkb` Typer app
   alembic/      # migrations — batch mode mandatory (SQLite ALTER TABLE limitations)
   tests/
 frontend/
@@ -289,6 +320,8 @@ frontend/
     pages/          # HomePage (search + capture + recent list), IncidentDetailPage
 mcp_server/
   server/main.py  # MCP tools — thin wrappers over backend/app/services (stdio transport)
+scripts/
+  engkb           # thin wrapper: `engkb <command>` without remembering the uv invocation
 data/           # gitignored: engineering.db, attachments/, embeddings/, indexes/
 docs/
   RESEARCH.md      # decision record: what was chosen, alternatives, tradeoffs, why

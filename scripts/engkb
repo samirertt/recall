@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Thin wrapper so `engkb <command>` works from anywhere without remembering
+# `uv run --project <repo> python -m app.cli`.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="$HOME/.local/bin:$PATH"
+exec uv run --project "$REPO_ROOT" --directory "$REPO_ROOT/backend" python -m app.cli "$@"
