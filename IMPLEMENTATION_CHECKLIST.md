@@ -152,16 +152,19 @@ start of any new session — do not rely on conversational memory.
 - [ ] Retrieval benchmark harness — the ~150-250-incident labeled benchmark from docs/RESEARCH.md § Retrieval Evaluation is not built; only ad hoc integration tests exist so far
 
 ## PHASE 10 — AI Enrichment
-- [ ] Title generation
-- [ ] Problem normalization
-- [ ] Root cause extraction
-- [ ] Solution extraction
-- [ ] Lessons-learned extraction
-- [ ] Tag / technology detection
-- [ ] Environment extraction
-- [ ] Duplicate detection on save
-- [ ] Confidence + provenance tracking (`generated_by_ai`, `model`, `generated_at`, `user_verified`)
-- [ ] Graceful failure (incident always saves even if AI is down)
+- [x] Title generation — via whichever AIProvider is active; heuristic (first line) by default in this environment (no API key configured)
+- [x] Problem normalization — `normalized_problem` field, same pipeline as title/root_cause
+- [x] Root cause extraction
+- [x] Solution extraction
+- [x] Lessons-learned extraction (+ `why_solution_worked`)
+- [x] Tag / technology detection — `IncidentExtraction.tags`/`technologies`; not yet auto-attached as `IncidentTag`/`IncidentTechnology` rows (open — currently just recorded in provenance, no auto-link step)
+- [ ] Environment extraction — not implemented; environment is still human-entered only (Phase 5)
+- [x] Duplicate detection on save — lexical-based (Phase 3/5's `possible_duplicates`); no separate AI-based duplicate pass
+- [x] Confidence + provenance tracking — `ExtractionProvenance` rows per field (`basis`/`confidence`/`extractor_provider`/`extractor_model`/`prompt_version`/`schema_version`/`extracted_at`); verification is deterministic (rapidfuzz match against raw text → `explicit` vs `synthesized`/`inferred`), not self-reported LLM confidence — see docs/RESEARCH.md § AI Provider Abstraction
+- [x] Graceful failure (incident always saves even if AI is down) — `_try_enrich` catches and logs, never blocks; verified in tests and via a real HTTP round trip
+- [x] AI provider abstraction — `AIProvider` Protocol: `HeuristicProvider` (zero-LLM, always available), `ClaudeProvider` (`messages.parse(output_format=...)`), `OpenAICompatibleProvider` (`chat.completions.parse(response_format=...)`). `get_ai_provider()` never raises/returns None — always falls back to heuristic.
+- [ ] Live-tested Claude/OpenAI extraction — **not run against a real API** (no ANTHROPIC_API_KEY/OPENAI_API_KEY available in this dev environment). Provider *selection* and *fallback* logic is tested; the actual wire calls to `messages.parse`/`chat.completions.parse` are unverified against live endpoints. Set `ENGMEM_AI_PROVIDER=claude` + `ANTHROPIC_API_KEY` (or `openai_compatible` + `ENGMEM_OPENAI_API_KEY`/`ENGMEM_OPENAI_API_BASE`) and re-test before relying on this in production.
+- [ ] "Never overwrite an already-set field" rule is a simple null-check, not provenance-aware — it can't distinguish "heuristic already set this" from "human deliberately set this," so a field the heuristic fills first will resist a later, better AI pass unless manually cleared. A `force re-enrich` path (Section 41) would resolve this; not built yet.
 
 ## PHASE 11 — Knowledge Graph
 - [ ] Relationship schema (typed edges: related_to, caused_by, solved_by, supersedes, ...)

@@ -14,6 +14,7 @@ from app.models.incident import Attempt, Incident
 from app.models.reference import Project, Tag, Technology
 from app.models.relationships import IncidentProject, IncidentTag, IncidentTechnology
 from app.schemas.incident import IncidentCreate, IncidentUpdate, QuickCaptureIn
+from app.services.ai.service import enrich_incident
 from app.services.embeddings.service import embed_incident
 
 logger = logging.getLogger(__name__)
@@ -28,36 +29,38 @@ _INCIDENT_LOAD_OPTIONS = (
 
 
 async def create_incident(session: AsyncSession, data: IncidentCreate) -> Incident:
-    """Section 18: zero-friction capture. Must always succeed synchronously —
-    no AI/embedding/attachment dependency sits on this path (docs/ARCHITECTURE.md § 3)."""
+    """Section 18: zero-friction capture. The raw save always succeeds synchronously
+    with no AI/embedding/attachment dependency (docs/ARCHITECTURE.md § 3); enrichment
+    and embedding run best-effort immediately after, never blocking or failing this
+    call. Title starts null — `needs_ai_review` stays true until a real (non-
+    heuristic) provider looks at it, and the frontend renders a null title as
+    "Incident #<id>" so this is never a broken/empty-looking state."""
     incident = Incident(
         raw_problem=data.raw_problem,
         raw_solution=data.raw_solution,
         status=IncidentStatus.solved if data.raw_solution else IncidentStatus.unresolved,
-        # No AI provider wired up yet (Phase 10) — flag for later review rather than
-        # silently leaving title/root_cause/etc. unset with no signal (Section 21).
         needs_ai_review=True,
-        title=_heuristic_title(data.raw_problem),
     )
     session.add(incident)
     await session.commit()
+    await _try_enrich(session, incident)
     await _try_embed(session, incident)
     return await get_incident(session, incident.id)
 
 
 async def quick_capture(session: AsyncSession, data: QuickCaptureIn) -> Incident:
-    """Section 19: save immediately; structuring happens later (Phase 10, async)."""
+    """Section 19: save immediately; structuring happens via best-effort enrichment."""
     return await create_incident(session, IncidentCreate(raw_problem=data.raw_text))
 
 
-def _heuristic_title(raw_problem: str, max_len: int = 120) -> str:
-    """Zero-LLM fallback title (docs/ARCHITECTURE.md § 6 HeuristicProvider): first
-    non-blank line, truncated. Replaced by AI-generated title once Phase 10 lands."""
-    for line in raw_problem.splitlines():
-        stripped = line.strip()
-        if stripped:
-            return stripped[:max_len]
-    return raw_problem[:max_len]
+async def _try_enrich(session: AsyncSession, incident: Incident) -> None:
+    """AI enrichment (Phase 10) is best-effort and must never fail/block a capture or
+    edit (docs/ARCHITECTURE.md § 10) — errors never propagate, but are logged rather
+    than silently swallowed (Section 87)."""
+    try:
+        await enrich_incident(session, incident)
+    except Exception:
+        logger.exception("AI enrichment failed for incident %s; continuing without it", incident.id)
 
 
 async def _try_embed(session: AsyncSession, incident: Incident) -> None:
@@ -151,6 +154,7 @@ async def update_incident(
             incident.tag_links.append(IncidentTag(tag_id=tag.id))
 
     await session.commit()
+    await _try_enrich(session, incident)
     await _try_embed(session, incident)
     return await get_incident(session, incident_id)
 

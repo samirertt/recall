@@ -51,10 +51,19 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-def reset_engine_cache() -> None:
-    """Test-only: call after changing ENGMEM_DATABASE_PATH + Settings.cache_clear()."""
+async def reset_engine_cache() -> None:
+    """Test-only: call after changing ENGMEM_DATABASE_PATH + Settings.cache_clear().
+    Disposes the outgoing engine first — otherwise aiosqlite's background worker
+    thread can outlive the test's event loop and log a harmless but noisy
+    "Event loop is closed" warning during later garbage collection."""
+    try:
+        engine = get_engine()
+    except Exception:
+        engine = None
     get_engine.cache_clear()
     get_session_factory.cache_clear()
+    if engine is not None:
+        await engine.dispose()
 
 
 def is_fts5_available() -> bool:
