@@ -108,15 +108,15 @@ start of any new session — do not rely on conversational memory.
 - [ ] Basic duplicate-detection UX surfaced in a frontend (backend already returns `possible_duplicates` on create — Section 22 — but there's no UI yet since Phase 4 hasn't started)
 
 ## PHASE 6 — Attachments
-- [ ] Upload endpoint
-- [ ] Filesystem storage layout (`data/attachments/<incident-id>/...`)
-- [ ] Attachment metadata in DB
-- [ ] Text extraction (logs, text files, code → searchable text)
-- [ ] PDF text extraction
-- [ ] OCR for screenshots
-- [ ] Extracted text feeds search without altering originals
-- [ ] Attachment viewer (frontend)
-- [ ] Integrity checks (missing/orphaned files)
+- [x] Upload endpoint — POST /incidents/{id}/attachments (multipart), 413 on >25MB
+- [x] Filesystem storage layout (`data/attachments/<incident-id>/...`) — server-generated on-disk filenames only (never the user's filename), defense-in-depth path check in `read_attachment_bytes`
+- [x] Attachment metadata in DB — Attachment (filename/mime/size/sha256) + ExtractedText
+- [x] Text extraction (logs, text files, code → searchable text) — charset-normalizer + ANSI stripping
+- [x] PDF text extraction — PyMuPDF primary, pypdf fallback, per-page OCR fallback for image-only pages
+- [x] OCR for screenshots — Tesseract via pytesseract (grayscale/upscale/dark-mode-invert preprocessing); genuinely tested degrading gracefully in this dev environment, which has no Tesseract binary installed
+- [x] Extracted text feeds search without altering originals — separate `extracted_texts_fts` FTS5 index (migration d21505cad1e4), original attachment bytes never touched
+- [ ] Attachment viewer (frontend) — blocked on Phase 4 (no frontend yet)
+- [ ] Integrity checks (missing/orphaned files) — deferred to Phase 13's `engkb doctor`
 
 ## PHASE 7 — Search (Lexical)
 - [x] FTS5 virtual table + sync triggers (built in Phase 2's migration; see there)
@@ -237,15 +237,16 @@ start of any new session — do not rely on conversational memory.
 ---
 
 ## Known limitations / open items
-- No frontend yet (Phase 4 not started) — everything so far is verified via the API/pytest and one manual curl smoke test against a real `uvicorn` process.
-- No attachments (Phase 6), embeddings/vector search (Phase 8), real hybrid score fusion (Phase 9), AI enrichment (Phase 10), knowledge-graph write paths beyond the DB layer (Phase 11 traversal exists, but no API/UI to create relations yet), MCP/Claude Code integration (Phase 12), CLI (Phase 13), or backup/import (Phase 14).
+- No frontend yet (Phase 4 not started) — everything so far is verified via the API/pytest (23/23 passing) and manual curl/upload smoke tests against a real `uvicorn` process.
+- No embeddings/vector search (Phase 8), real hybrid score fusion (Phase 9), AI enrichment (Phase 10), knowledge-graph write paths beyond the DB layer (Phase 11 traversal exists, but no API/UI to create relations yet), MCP/Claude Code integration (Phase 12), CLI (Phase 13), or backup/import (Phase 14).
 - Duplicate detection (Section 22) is backend-only right now (`possible_duplicates` on incident creation) — no UI to act on it.
 - Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH.
+- Tesseract OCR is genuinely unavailable in this dev environment (no system binary installed) — verified this degrades correctly (attachment still saves, extraction recorded as `failed`) rather than assuming it. Install `tesseract-ocr` to exercise the real OCR path.
 - `git push` is not possible from this sandboxed dev environment (no HTTPS credential helper or registered SSH key for the `origin` remote) — commits are local only until the user pushes them or authorizes the environment.
 
 ## Next actions
-1. Phase 6 — Attachments: upload endpoint, filesystem storage, text/PDF/OCR extraction pipeline (docs/RESEARCH.md § Attachment Ingestion & OCR).
-2. Phase 4 — Frontend: Vite/React/Tailwind scaffold, capture form, search view, incident detail view (docs/RESEARCH.md § Frontend Stack for exact versions).
-3. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
-4. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
+1. Phase 4 — Frontend: Vite/React/Tailwind scaffold, capture form, search view, incident detail view (docs/RESEARCH.md § Frontend Stack for exact versions).
+2. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
+3. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
+4. Phase 14 — Backup/export/import.
 _(updated as work proceeds)_

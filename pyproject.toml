@@ -60,3 +60,4 @@ known-first-party = ["app"]
 
 [tool.uv]
 package = false
+default-groups = ["dev", "ingestion"]

@@ -50,6 +50,18 @@ _TRIGRAM_SQL = text(
     """
 )
 
+_ATTACHMENT_TEXT_SQL = text(
+    """
+    SELECT DISTINCT a.incident_id AS incident_id,
+           snippet(extracted_texts_fts, -1, '**', '**', '...', 10) AS snippet
+    FROM extracted_texts_fts
+    JOIN extracted_texts et ON et.id = extracted_texts_fts.rowid
+    JOIN attachments a ON a.id = et.attachment_id
+    WHERE extracted_texts_fts MATCH :match_query
+    LIMIT :limit
+    """
+)
+
 
 async def search_lexical(
     session: AsyncSession, query: str, limit: int = 20
@@ -73,3 +85,15 @@ async def search_trigram(session: AsyncSession, query: str, limit: int = 20) -> 
         return []
     result = await session.execute(_TRIGRAM_SQL, {"match_query": match_query, "limit": limit})
     return [row.incident_id for row in result.fetchall()]
+
+
+async def search_attachment_text(session: AsyncSession, query: str, limit: int = 20) -> list[dict]:
+    """Section 17: extracted attachment text (logs/PDFs/OCR'd screenshots) is
+    searchable without altering the original evidence file."""
+    match_query = _build_match_query(query)
+    if match_query is None:
+        return []
+    result = await session.execute(
+        _ATTACHMENT_TEXT_SQL, {"match_query": match_query, "limit": limit}
+    )
+    return [{"incident_id": row.incident_id, "snippet": row.snippet} for row in result.fetchall()]
