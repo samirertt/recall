@@ -218,11 +218,10 @@ Returns results ranked by a `fused_score`, each with a `signals` breakdown (whic
 lexical/trigram/vector/attachment-text/relationship matched, and how), a top-level
 `degraded` object (`vector_search: true` only if the embedding model genuinely
 couldn't be loaded — search keeps working lexical-only rather than erroring), and the
-`weights_profile` that produced the ranking. See
-[docs/ARCHITECTURE.md § 5](docs/ARCHITECTURE.md#5-retrieval-pipeline-phase-7-9-detail)
-for the full pipeline design, including what's still simplified (no dedicated
-exact-identifier extraction yet; metadata/environment-aware filtering isn't exposed
-on the endpoint yet).
+`weights_profile` that produced the ranking. See [docs/SEARCH.md](docs/SEARCH.md) for
+the full how-it-works reference (signals, fusion, query safety, the retrieval
+benchmark) and what's still simplified (no dedicated exact-identifier extraction yet;
+metadata/environment-aware filtering isn't exposed on the endpoint yet).
 
 ## Claude Code integration
 
@@ -270,6 +269,9 @@ is exercised as an automated test, not just described —
 `backend/tests/test_backup.py::test_full_export_delete_import_rebuild_search_round_trip`.
 
 ## Development
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the fuller reference (AI/embedding
+configuration, troubleshooting real issues hit while building this). Quick version:
 
 Backend:
 

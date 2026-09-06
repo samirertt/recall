@@ -225,10 +225,14 @@ start of any new session — do not rely on conversational memory.
     Metric note: uses precision@1 rather than precision@5 — this corpus's queries mostly have exactly one relevant incident, which caps precision@5 at 0.2 regardless of ranking quality (structurally uninformative); documented in the test file.
 
 ## PHASE 16 — Security
-- [ ] No secrets/credentials logged or committed
-- [ ] Path traversal prevention on attachments
-- [ ] Upload validation
-- [ ] Security review pass
+- [x] No secrets/credentials logged or committed — verified no hardcoded keys anywhere; `.env`/`.env.*` gitignored (`.env.example` added, no real values); AI provider adapters never log request/response bodies containing keys
+- [x] Path traversal prevention on attachments — server-generated on-disk filenames (never the uploaded filename) + a defense-in-depth resolved-path check in `read_attachment_bytes`; tested (`test_attachment_storage_rejects_path_traversal_in_relative_path`)
+- [x] Upload validation — 25MB size cap (413 on exceed); no file-type allowlist/denylist (attachments are never executed, only stored + text-extracted, so this is an intentional non-restriction, not an oversight)
+- [x] Security review pass
+    Result: found and fixed a **real stored-XSS vulnerability** — attachment downloads served the uploader's browser-supplied `Content-Type` verbatim with no `Content-Disposition`, so an uploaded `text/html` (or `image/svg+xml`, which can also embed `<script>`) file would execute at this app's own origin when opened. Fixed: `safe_download_headers()` forces `Content-Disposition: attachment` for anything outside a small inline-safe allowlist (images excluding SVG, audio, video, PDF, plain text) and always adds `X-Content-Type-Options: nosniff`. Tested with an actual `<script>` payload (`test_uploaded_html_is_never_served_inline`, `test_uploaded_svg_is_never_served_inline`) confirming both the fix and that legitimate inline types (PNG) still work.
+    Also added: a 500,000-character cap on every incident free-text field (previously unbounded — a large paste could force an unbounded embedding/FTS-write cost per request; low severity for a single-user local tool, but free to close).
+    Reviewed and found no issue: SQL injection (every query is parameterized; the few f-string-built SQL statements interpolate only fixed internal constants, never user input — verified via `grep`), CORS (origins restricted to the configured frontend origin, no wildcard `allow_credentials`), frontend XSS (only one `dangerouslySetInnerHTML` call, already HTML-escaping before highlighting — Phase 4), import zip-slip (Python 3.13's `zipfile.extractall()` sanitizes path traversal in member names by default).
+    Not addressed (noted, not a gap in this pass): no zip-bomb size-limit check on `engkb import` — accepted as low-risk since import is a deliberate local CLI action on a file the user already chose to trust, not an untrusted upload vector.
 
 ## PHASE 17 — Performance
 - [ ] Lexical search < 100ms target

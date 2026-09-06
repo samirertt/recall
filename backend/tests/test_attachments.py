@@ -109,3 +109,57 @@ async def test_attachment_storage_rejects_path_traversal_in_relative_path():
 async def test_download_nonexistent_attachment_404s(client):
     resp = await client.get("/attachments/999999/content")
     assert resp.status_code == 404
+
+
+async def test_uploaded_html_is_never_served_inline(client):
+    """Section 53/Phase 16: an uploaded text/html file must download as an
+    attachment, not render inline — otherwise an embedded <script> would execute
+    at this app's own origin (stored XSS), since mime_type is uploader-supplied."""
+    incident_id = await _create_incident(client)
+    payload = b"<html><body><script>alert(document.cookie)</script></body></html>"
+
+    upload = await client.post(
+        f"/incidents/{incident_id}/attachments",
+        files={"file": ("evil.html", io.BytesIO(payload), "text/html")},
+    )
+    attachment_id = upload.json()["id"]
+
+    download = await client.get(f"/attachments/{attachment_id}/content")
+    assert download.status_code == 200
+    assert download.content == payload  # original bytes still served correctly...
+    assert download.headers["content-disposition"].startswith("attachment")  # ...but not inline
+    assert download.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_uploaded_image_still_serves_inline(client):
+    """Legitimate inline types (images, PDFs, plain text) keep working normally —
+    the XSS fix shouldn't degrade the common case."""
+    incident_id = await _create_incident(client)
+    upload = await client.post(
+        f"/incidents/{incident_id}/attachments",
+        files={"file": ("shot.png", io.BytesIO(b"\x89PNG\r\n\x1a\nfake"), "image/png")},
+    )
+    attachment_id = upload.json()["id"]
+
+    download = await client.get(f"/attachments/{attachment_id}/content")
+    assert download.headers["content-disposition"].startswith("inline")
+
+
+async def test_uploaded_svg_is_never_served_inline(client):
+    """SVG can embed <script> despite the image/ MIME prefix — must not get the
+    same inline treatment as ordinary images."""
+    incident_id = await _create_incident(client)
+    upload = await client.post(
+        f"/incidents/{incident_id}/attachments",
+        files={
+            "file": (
+                "evil.svg",
+                io.BytesIO(b"<svg><script>alert(1)</script></svg>"),
+                "image/svg+xml",
+            )
+        },
+    )
+    attachment_id = upload.json()["id"]
+
+    download = await client.get(f"/attachments/{attachment_id}/content")
+    assert download.headers["content-disposition"].startswith("attachment")

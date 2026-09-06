@@ -37,3 +37,36 @@ def read_attachment_bytes(relative_path: str) -> bytes:
     if not str(path).startswith(str(base)):
         raise ValueError("Invalid attachment path")  # defense in depth
     return path.read_bytes()
+
+
+# Section 53: never trust the stored mime_type enough to render it inline without
+# thought — it's the *uploader's* browser-supplied Content-Type at upload time, not
+# something we've verified. Serving an uploaded text/html (or image/svg+xml, which
+# can embed <script>) file back with its own claimed content-type and no
+# Content-Disposition would let a stored HTML/SVG payload execute at this app's own
+# origin when opened — a stored-XSS vector, not merely a display quirk.
+_INLINE_SAFE_MIME_PREFIXES = ("image/", "audio/", "video/")
+_INLINE_SAFE_MIME_EXACT = {"application/pdf", "text/plain"}
+_INLINE_UNSAFE_MIME_EXACT = {"image/svg+xml"}  # can embed <script> despite the image/ prefix
+
+
+def _sanitize_header_value(value: str) -> str:
+    """Strips characters that could enable HTTP header injection or break the
+    Content-Disposition quoting — filenames here originate from the uploader's
+    browser and are otherwise untrusted."""
+    return "".join(c for c in value if c not in ('"', "\r", "\n", "\x00")) or "attachment"
+
+
+def safe_download_headers(mime_type: str | None, filename: str) -> tuple[str, dict[str, str]]:
+    """Returns (media_type, extra_headers) safe to serve back to a browser."""
+    mime = mime_type or "application/octet-stream"
+    inline_safe = (
+        mime.startswith(_INLINE_SAFE_MIME_PREFIXES) or mime in _INLINE_SAFE_MIME_EXACT
+    ) and mime not in _INLINE_UNSAFE_MIME_EXACT
+
+    disposition = "inline" if inline_safe else "attachment"
+    safe_filename = _sanitize_header_value(filename)
+    return mime, {
+        "Content-Disposition": f'{disposition}; filename="{safe_filename}"',
+        "X-Content-Type-Options": "nosniff",
+    }

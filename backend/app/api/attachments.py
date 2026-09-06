@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.schemas.attachment import AttachmentRead, ExtractedTextRead
 from app.services.attachments import service as attachments_service
 from app.services.attachments.service import AttachmentTooLarge
-from app.services.attachments.storage import read_attachment_bytes
+from app.services.attachments.storage import read_attachment_bytes, safe_download_headers
 from app.services.incidents import service as incidents_service
 
 router = APIRouter(tags=["attachments"])
@@ -45,8 +45,8 @@ async def download_attachment(attachment_id: int, session: AsyncSession = Depend
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
     data = read_attachment_bytes(attachment.relative_path)
-    media_type = attachment.mime_type or "application/octet-stream"
-    return Response(content=data, media_type=media_type)
+    media_type, headers = safe_download_headers(attachment.mime_type, attachment.filename)
+    return Response(content=data, media_type=media_type, headers=headers)
 
 
 @router.get("/attachments/{attachment_id}/extracted-text", response_model=ExtractedTextRead)

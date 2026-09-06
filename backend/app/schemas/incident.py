@@ -51,31 +51,39 @@ class AttemptRead(AttemptIn):
     created_at: datetime
 
 
+# Generous enough for a large pasted log (Section 19: "paste anything"), but bounded
+# so a single request can't force an unbounded embedding-model/FTS-write/DB-row cost
+# (Phase 16 security pass — this is a local single-user tool with no auth, so the
+# realistic risk is an accidental giant paste hanging the request, not a hostile
+# actor, but the cap costs nothing and closes the gap either way).
+MAX_TEXT_LENGTH = 500_000
+
+
 # --- Zero-friction capture (Section 18): only raw_problem is required. ---
 class IncidentCreate(BaseModel):
-    raw_problem: str = Field(min_length=1)
-    raw_solution: str | None = None
+    raw_problem: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
+    raw_solution: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
 
 
 class QuickCaptureIn(BaseModel):
     """Section 19: paste one blob, save immediately, structure it later (async)."""
 
-    raw_text: str = Field(min_length=1)
+    raw_text: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
 
 
 class IncidentUpdate(BaseModel):
     """Everything the zero-friction create endpoint deliberately omits (Section 18)
     can be filled in afterwards — by a human or by AI enrichment (Phase 10)."""
 
-    raw_solution: str | None = None
-    title: str | None = None
-    normalized_problem: str | None = None
-    symptoms: str | None = None
-    root_cause: str | None = None
-    solution: str | None = None
-    explanation: str | None = None
-    why_solution_worked: str | None = None
-    lesson_learned: str | None = None
+    raw_solution: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    title: str | None = Field(default=None, max_length=300)
+    normalized_problem: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    symptoms: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    root_cause: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    solution: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    explanation: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    why_solution_worked: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
+    lesson_learned: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
     status: IncidentStatus | None = None
     severity: Severity | None = None
     confidence: float | None = None

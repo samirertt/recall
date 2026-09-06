@@ -78,3 +78,10 @@ async def test_get_list_update_and_archive_incident(client):
 async def test_get_nonexistent_incident_404s(client):
     resp = await client.get("/incidents/999999")
     assert resp.status_code == 404
+
+
+async def test_create_rejects_absurdly_long_raw_problem(client):
+    """Phase 16 security pass: an unbounded paste could otherwise force an
+    unbounded embedding/FTS-write cost per request."""
+    resp = await client.post("/incidents", json={"raw_problem": "x" * 500_001})
+    assert resp.status_code == 422
