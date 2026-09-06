@@ -176,19 +176,22 @@ start of any new session — do not rely on conversational memory.
 - [x] Graph visualization (frontend) — a simple related/suggested-incidents list on the incident detail page, with a one-click "Link" to accept a suggestion. **Not** the force-directed graph view docs/RESEARCH.md's frontend stack section describes (`react-force-graph`) — that's still open if a visual graph explorer is wanted later.
 
 ## PHASE 12 — Claude Code Integration
-- [ ] MCP server scaffold
-- [ ] `search_engineering_knowledge` tool
-- [ ] `get_incident` tool
-- [ ] `get_related_incidents` tool
-- [ ] `search_by_error_code` tool
-- [ ] `search_by_technology` tool
-- [ ] `search_by_project` tool
-- [ ] `find_previous_solution` tool
-- [ ] `get_engineering_history` tool
-- [ ] `create_incident` tool
-- [ ] `update_incident` tool
-- [ ] Claude Code registration/config documented
-- [ ] Integration tests
+- [x] MCP server scaffold — `mcp_server/server/main.py`, official `mcp` SDK 2.1.1, stdio transport
+    Result: named `mcp_server/`, **not** `mcp/` as the source spec's Section 60 suggested — that name collides with the installed `mcp` PyPI package (`python -m mcp.server.main` from repo root resolves `mcp` to the local directory, not the SDK, and fails). Caught and fixed before committing; documented in the module docstring and docs/CLAUDE_CODE.md.
+- [x] `search_engineering_knowledge` tool
+- [x] `get_incident` tool
+- [x] `get_related_incidents` tool
+- [x] `search_by_error_code` tool
+- [x] `search_by_technology` tool
+- [x] `search_by_project` tool
+- [x] `find_previous_solution` tool
+- [x] `get_engineering_history` tool
+- [x] `create_incident` tool
+- [x] `update_incident` tool
+- [x] Claude Code registration/config documented — docs/CLAUDE_CODE.md (setup, tool table, security, example usage)
+- [x] Integration tests
+    Result: backend/tests/test_mcp_server.py launches the server as a **real subprocess** over stdio and drives it with the actual MCP client SDK (not just calling the Python functions in-process) — tool listing, create_incident, search_engineering_knowledge, get_incident all verified. This is what caught the `mcp/` naming collision.
+- [ ] Registration against a live `claude` CLI — **not tested**: no `claude` binary is installed in this dev sandbox. The `claude mcp add`/`claude mcp list` commands in docs/CLAUDE_CODE.md are per current official docs but unverified end-to-end here.
 
 ## PHASE 13 — CLI
 - [ ] `engkb search`

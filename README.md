@@ -51,10 +51,19 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 - **Zero-friction capture** — `POST /incidents` requires only a problem description;
   everything else (environment, tags, technologies, root cause, ...) is optional and
-  can be filled in later, by a human or (once Phase 10 lands) by AI.
+  gets filled in by best-effort AI enrichment right after saving, or later by a human.
 - **Quick capture** — `POST /incidents/quick-capture` saves a raw pasted blob
-  immediately; structuring it is deferred (today: a heuristic title; later: AI
-  extraction — see the roadmap).
+  immediately; structuring happens via the same best-effort enrichment.
+- **AI enrichment** — a provider abstraction (Claude / OpenAI-compatible / heuristic
+  fallback) fills title/root-cause/solution/lesson-learned, never overwriting a field
+  already set by a human. No API key is configured in this dev environment, so the
+  zero-LLM heuristic provider is what actually runs — see
+  [What's not built yet](#whats-not-built-yet). Every field's provenance is recorded
+  (deterministic fuzzy-match against the raw text, not self-reported LLM confidence).
+- **Knowledge graph** — link incidents together (`POST /incidents/{id}/relations`),
+  browse N-hop related incidents, and see AI-*suggested* relationships computed from
+  embedding similarity — suggestions are never auto-created, only proposed for a
+  one-click accept.
 - **Editing** — `PATCH /incidents/{id}` to add environment details, failed attempts,
   root cause/solution, and project/technology/tag associations (created on the fly by
   name — no separate "create a tag first" step).
@@ -80,10 +89,8 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## What's not built yet
 
-AI-based enrichment (title/root-cause/tag extraction), the knowledge graph's
-relationship-authoring API/UI, MCP/Claude Code integration, the CLI, and
-backup/export/import. All of these are researched and architected already (see the
-docs above) — they're sequenced in
+The CLI and backup/export/import. Both are researched and architected already (see
+the docs above) — sequenced in
 [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
 ---
@@ -216,11 +223,13 @@ on the endpoint yet).
 
 ## Claude Code integration
 
-Not built yet (Phase 12). The plan — an MCP server using the official Python SDK over
-stdio, registered at user scope so it's available from any project — is fully
-researched and specified in
-[docs/RESEARCH.md § MCP Integration](docs/RESEARCH.md#mcp-integration) and
-[§ Claude Code Integration](docs/RESEARCH.md#claude-code-integration).
+An MCP server (`mcp_server/`) exposes ten tools (search, get/create/update incident,
+related-incidents traversal, technology/project/error-code search, previous-solution
+lookup, history browse) over stdio, backed by the same service modules the REST API
+uses. See [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md) for setup (`claude mcp add`) and
+the full tool list. Verified end-to-end by launching it as a real subprocess and
+driving it with the actual MCP client SDK (`backend/tests/test_mcp_server.py`) — not
+yet registered against a live `claude` CLI (none is installed in this dev sandbox).
 
 ## Backup
 
@@ -270,7 +279,7 @@ backend/
     db/         # engine/session construction, lazily built (test-friendly)
     models/     # SQLAlchemy 2.0 models — the canonical schema
     schemas/    # Pydantic request/response models — kept separate from models/ on purpose
-    services/   # business logic, shared by the REST API and (later) MCP
+    services/   # business logic, shared by the REST API and MCP server
   alembic/      # migrations — batch mode mandatory (SQLite ALTER TABLE limitations)
   tests/
 frontend/
@@ -278,12 +287,19 @@ frontend/
     lib/api.ts      # typed fetch client, mirrors backend/app/schemas
     components/     # SearchBar, CaptureForm, ResultCard
     pages/          # HomePage (search + capture + recent list), IncidentDetailPage
+mcp_server/
+  server/main.py  # MCP tools — thin wrappers over backend/app/services (stdio transport)
 data/           # gitignored: engineering.db, attachments/, embeddings/, indexes/
 docs/
   RESEARCH.md      # decision record: what was chosen, alternatives, tradeoffs, why
   ARCHITECTURE.md  # how those decisions compose into the system
+  CLAUDE_CODE.md   # MCP setup/tool reference
 IMPLEMENTATION_CHECKLIST.md   # persistent, continuously-updated build status
 ```
+
+Note the package name `mcp_server/`, not `mcp/` — it collides with the installed `mcp`
+PyPI package if named that (see the module's own docstring for how that failure
+actually manifests).
 
 Configuration is via environment variables (prefix `ENGMEM_`, see
 `backend/app/core/config.py`) or a `.env` file — see `Settings` for the full list
