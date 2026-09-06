@@ -1,0 +1,119 @@
+# Labeled queries for the retrieval benchmark (Phase 15). `must_outrank` pairs are
+# the automatable form of "qualitative environment-aware ranking" (Section 27/57):
+# instead of eyeballing whether a mismatched result "feels" less relevant, assert a
+# strict rank ordering on curated pairs.
+
+- query: "training job crashes with CUDA out of memory, nvidia-smi shows the card isn't full, running directly on bare metal"
+  relevant: [cuda-oom-bare-metal]
+  partial: [cuda-oom-docker]
+  category: cuda
+  must_outrank:
+    - {preferred: cuda-oom-bare-metal, over: cuda-oom-docker}
+
+- query: "CUDA out of memory inside a Docker container even though host nvidia-smi shows free GPU memory"
+  relevant: [cuda-oom-docker]
+  partial: [cuda-oom-bare-metal]
+  category: cuda
+  must_outrank:
+    - {preferred: cuda-oom-docker, over: cuda-oom-bare-metal}
+
+# The canonical Section 76/57 acceptance scenario, verbatim query text.
+- query: "My Jetson stopped seeing CUDA after reinstalling Python packages."
+  relevant: [embedded-jetson-cuda-pytorch]
+  category: embedded
+  must_outrank:
+    - {preferred: embedded-jetson-cuda-pytorch, over: filler-desktop-cuda-driver-crash}
+
+- query: "Jetson I2C sensor returns garbage readings, voltage level mismatch between 5V and 3.3V logic"
+  relevant: [embedded-i2c-voltage-mismatch]
+  category: embedded
+
+- query: "ROS2 subscriber receives nothing even though the publisher and topic both show up, reliability QoS policy mismatch"
+  relevant: [ros2-qos-mismatch]
+  partial: [ros2-dds-discovery]
+  category: ros2
+
+- query: "ROS2 topic silently not delivered across a VLAN boundary, multicast discovery packets dropped"
+  relevant: [ros2-dds-discovery]
+  partial: [ros2-qos-mismatch]
+  category: ros2
+
+- query: "Docker rebuild doesn't pick up new source code changes, stale layer cache from a retagged base image"
+  relevant: [docker-stale-build-cache]
+  category: docker
+
+- query: "docker-compose container can't reach a sibling service by name, connection refused, both containers running"
+  relevant: [docker-compose-service-name-networking]
+  category: docker
+
+- query: "C++ segfault from vector index out of bounds, unsigned integer underflow on x86_64"
+  relevant: [cpp-segfault-x86]
+  partial: [cpp-segfault-arm-embedded]
+  category: cpp
+  must_outrank:
+    - {preferred: cpp-segfault-x86, over: cpp-segfault-arm-embedded}
+
+- query: "the same vector-indexing C++ code segfaults on an ARM embedded board but not on desktop, struct alignment ABI"
+  relevant: [cpp-segfault-arm-embedded]
+  partial: [cpp-segfault-x86]
+  category: cpp
+  must_outrank:
+    - {preferred: cpp-segfault-arm-embedded, over: cpp-segfault-x86}
+
+- query: "ModuleNotFoundError even though pip show confirms the package is installed, wrong virtualenv active"
+  relevant: [python-modulenotfound-venv]
+  category: python
+
+- query: "ImportError cannot import name from a partially initialized module after splitting a package into submodules"
+  relevant: [python-circular-import]
+  category: python
+
+- query: "systemd service fails right after a reboot with a relative path not found error"
+  relevant: [linux-systemd-wrong-workdir]
+  category: linux
+
+- query: "systemd service runs for a few minutes then gets killed with no error in its own logs, cgroup OOM killer"
+  relevant: [linux-systemd-cgroup-oom]
+  category: linux
+
+- query: "client gets ECONNREFUSED connecting to a service, process had actually crashed on startup"
+  relevant: [networking-econnrefused-not-listening]
+  partial: [networking-firewall-timeout]
+  category: networking
+
+- query: "connection times out instead of being refused, firewall silently dropping packets on that port"
+  relevant: [networking-firewall-timeout]
+  partial: [networking-econnrefused-not-listening]
+  category: networking
+
+- query: "commits vanished after an interactive rebase, detached HEAD state, recovered via reflog"
+  relevant: [git-detached-head]
+  category: git
+
+- query: "a teammate's already-pushed commits disappeared from a shared branch after a force push overwrote it"
+  relevant: [git-force-push-overwrite]
+  category: git
+
+- query: "Postgres connection pool exhausted under load despite low database CPU usage, leaked connections"
+  relevant: [db-postgres-pool-exhaustion]
+  category: databases
+
+- query: "queries against a Postgres table hang for tens of seconds, a long-running transaction is holding a row lock"
+  relevant: [db-postgres-lock-wait]
+  category: databases
+
+- query: "after OpenCV camera calibration, undistorted frames still show curved lines near the edges"
+  relevant: [cv-camera-calibration-distortion]
+  category: computer_vision
+
+- query: "object detector produces false positives after real deployment, not a calibration problem, camera auto-exposure"
+  relevant: [cv-detector-false-positives-lighting]
+  category: computer_vision
+
+- query: "CMake keeps configuring with the wrong compiler even after changing CC and CXX environment variables"
+  relevant: [build-cmake-wrong-compiler]
+  category: build_systems
+
+- query: "Bazel build produces a stale binary that doesn't reflect a recent source change, remote cache"
+  relevant: [build-bazel-stale-remote-cache]
+  category: build_systems

@@ -216,10 +216,13 @@ start of any new session — do not rely on conversational memory.
     Result: `backend/tests/test_backup.py` — valid-export shape, content-addressed attachments, tampered-checksum rejection, future-manifest-version rejection, and the **full Section 77 acceptance scenario** (export → delete live DB + attachments entirely → import → rebuild embeddings → lexical search finds the incident → attachment-text search finds it too). All passing.
 
 ## PHASE 15 — Testing
-- [ ] Unit tests (models, validation, parsing, extraction, search, ranking, relationships, import/export)
-- [ ] Integration tests (CRUD, search, embedding, AI, export/import, rebuild, MCP/API)
-- [ ] End-to-end workflow test
-- [ ] Retrieval benchmark results recorded
+- [x] Unit tests (models, validation, parsing, extraction, search, ranking, relationships, import/export) — 61 tests across backend/tests/
+- [x] Integration tests (CRUD, search, embedding, AI, export/import, rebuild, MCP/API) — all present; MCP specifically tested via a real subprocess + real client SDK, not mocked
+- [x] End-to-end workflow test — backend/tests/test_backup.py's Section 77 scenario (export → delete everything → import → rebuild → search) is the fullest one; no single test walks *every* step of Section 75's list (create→attach→embed→…→delete local copy→import→rebuild→search again) in one place — see Phase 19
+- [x] Retrieval benchmark results recorded
+    Result: `backend/tests/test_retrieval_eval.py` + `backend/tests/retrieval/fixtures/` (~32-incident corpus, one confusable pair per required category — CUDA/ROS2/Docker/C++/Python/Linux/networking/Git/databases/embedded/computer-vision/build-systems — plus 9 filler incidents; smaller than docs/RESEARCH.md's ~150-250 recommendation, a deliberate first-pass scope reduction). Measured baseline (both hybrid and lexical_only profiles): **precision@1 0.958, recall@10 1.0, MRR 0.979, pairwise-environment-accuracy 0.80**. Gates in `thresholds.yaml` set below this with headroom.
+    **This benchmark caught a real, significant bug**: `_build_match_query()` (Phase 7) joined FTS5 query tokens with no explicit operator, which FTS5 defaults to implicit AND — silently requiring *every single word* of a query to appear verbatim in an incident. This made lexical search fail on almost any natural-language query longer than 2-3 words (it "worked" in earlier tests only because those queries were short and fully contained in the target text). Fixed to explicit `OR` (the standard IR model — bm25's IDF weighting already rewards specific/rare terms over common ones, so this doesn't degenerate into "matches everything"). This had been silently degrading lexical search since Phase 7 with no test catching it until this benchmark existed.
+    Metric note: uses precision@1 rather than precision@5 — this corpus's queries mostly have exactly one relevant incident, which caps precision@5 at 0.2 regardless of ranking quality (structurally uninformative); documented in the test file.
 
 ## PHASE 16 — Security
 - [ ] No secrets/credentials logged or committed

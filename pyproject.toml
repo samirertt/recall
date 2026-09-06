@@ -23,6 +23,7 @@ dev = [
     "pytest-asyncio>=1.4,<2.0",
     "httpx>=0.28,<0.29",
     "ruff>=0.16,<0.17",
+    "pyyaml>=6.0.3",
 ]
 embeddings = [
     "fastembed>=0.5",

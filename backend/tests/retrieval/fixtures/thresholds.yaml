@@ -1,0 +1,17 @@
+# Per-profile regression gates (Phase 15). Calibrated against this benchmark's own
+# measured baseline (hybrid and lexical_only both scored ~0.96 precision@1, 1.00
+# recall@10, ~0.98 MRR, 0.80 pairwise-env-accuracy after fixing a real bug this
+# benchmark caught — see IMPLEMENTATION_CHECKLIST.md), then intentionally left with
+# headroom below that measured baseline — these are regression floors, not
+# aspirational targets. Re-baseline deliberately (in the same PR as a ranking/model/
+# tokenizer change), never by silently loosening a failing gate.
+hybrid:
+  precision_at_1: 0.80
+  recall_at_10: 0.90
+  mrr: 0.80
+  pairwise_env_accuracy: 0.70
+lexical_only:
+  precision_at_1: 0.80
+  recall_at_10: 0.90
+  mrr: 0.80
+  pairwise_env_accuracy: 0.60

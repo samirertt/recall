@@ -1,0 +1,307 @@
+# Retrieval benchmark corpus (Phase 15; docs/RESEARCH.md § Retrieval Evaluation).
+#
+# Synthetic (safe to commit/share), ~150-250 recommended by research — this is a
+# smaller first pass (~32 incidents, one confusable pair per required category)
+# rather than the full recommended scale. Documented as a deliberate scope
+# reduction in IMPLEMENTATION_CHECKLIST.md, not a silent shortcut. Each entry
+# doubles as a schema smoke test: it's ingested through the real create_incident
+# path, not inserted directly into the DB.
+#
+# Categories required by Section 56: CUDA, ROS2, Docker, C++, Python, Linux,
+# networking, Git, databases, embedded, computer vision, build systems.
+
+- id: cuda-oom-bare-metal
+  category: cuda
+  problem: >
+    Two training jobs launched on the same GPU both crash with
+    torch.cuda.OutOfMemoryError, even though nvidia-smi shows the card isn't full
+    when checked right after the crash.
+  solution: >
+    Enabled NVIDIA MPS (Multi-Process Service) so the two processes stop
+    fighting over the whole device's default memory fraction.
+  environment: {runtime: bare-metal, gpu: "RTX 4090"}
+
+- id: cuda-oom-docker
+  category: cuda
+  problem: >
+    CUDA out of memory error inside a Docker container running a single training
+    job, but nvidia-smi on the host shows plenty of free GPU memory.
+  solution: >
+    The --gpus flag was missing a memory-limit reconciliation with the
+    nvidia-container-runtime cgroup; fixed by setting an explicit device memory
+    limit in the container runtime config.
+  environment: {runtime: docker, gpu: "RTX 4090"}
+
+- id: ros2-qos-mismatch
+  category: ros2
+  problem: >
+    A ROS2 subscriber never receives messages from a publisher that is clearly
+    running (ros2 topic echo shows nothing, but ros2 topic list shows both
+    endpoints present).
+  solution: >
+    Publisher used reliability=BEST_EFFORT while the subscriber requested
+    reliability=RELIABLE; QoS profiles must be compatible. Aligned both to
+    RELIABLE.
+
+- id: ros2-dds-discovery
+  category: ros2
+  problem: >
+    Same silent-topic symptom as usual (subscriber gets nothing) but this time
+    QoS profiles already matched on both sides.
+  solution: >
+    Root cause was a DDS discovery/multicast networking issue across a VLAN
+    boundary; the two nodes were on subnets that dropped multicast discovery
+    packets. Fixed with a static peer list.
+
+- id: docker-stale-build-cache
+  category: docker
+  problem: >
+    A Docker image rebuild doesn't pick up new application code even after the
+    source file was clearly changed and saved.
+  solution: >
+    The base image had been retagged upstream without a version bump, so Docker's
+    layer cache treated the FROM line as unchanged; solved with --no-cache on
+    that one rebuild and pinning the base image by digest going forward.
+
+- id: docker-compose-service-name-networking
+  category: docker
+  problem: >
+    A container in a docker-compose stack can't reach a sibling container by its
+    service name — connection refused every time, even though both containers
+    show as running.
+  solution: >
+    The two services were declared under different `networks:` blocks in
+    compose, so they were never actually on the same Docker network; moved both
+    onto a shared network.
+
+- id: cpp-segfault-x86
+  category: cpp
+  problem: >
+    A C++ service segfaults intermittently under load; the crash is inside code
+    that accesses a std::vector by index near a resize.
+  solution: >
+    An off-by-one index computed from an unsigned subtraction wrapped around to
+    a huge value; fixed the bounds check and added -fsanitize=address to CI.
+  environment: {architecture: x86_64}
+
+- id: cpp-segfault-arm-embedded
+  category: cpp
+  problem: >
+    The exact same vector-indexing code that runs fine on the desktop build
+    segfaults immediately on an ARM-based embedded target.
+  solution: >
+    The embedded toolchain used a different struct alignment/ABI than x86_64, so
+    a reinterpret_cast that happened to work on x86_64 was undefined behavior on
+    ARM; replaced it with a properly aligned accessor.
+  environment: {architecture: arm, device: "embedded eval board"}
+
+- id: python-modulenotfound-venv
+  category: python
+  problem: >
+    ModuleNotFoundError for a package that "pip show" confirms is installed.
+  solution: >
+    pip had installed the package into the wrong virtualenv (a stale
+    VIRTUAL_ENV was still exported in the shell); fixed by deactivating and
+    re-activating the correct venv before installing.
+
+- id: python-circular-import
+  category: python
+  problem: >
+    ImportError: cannot import name X from partially initialized module,
+    appearing only after a package was split into submodules.
+  solution: >
+    Two submodules imported each other at module load time; broke the cycle by
+    moving the shared type into a third, lower-level module both could import
+    from.
+
+- id: linux-systemd-wrong-workdir
+  category: linux
+  problem: >
+    A systemd service that runs fine manually fails immediately after a reboot
+    with a relative-path-not-found error.
+  solution: >
+    The unit file had no WorkingDirectory= set, so it inherited systemd's
+    default (/) instead of the app's directory; added an explicit
+    WorkingDirectory= line.
+
+- id: linux-systemd-cgroup-oom
+  category: linux
+  problem: >
+    A systemd service starts, runs for a few minutes, then is killed with no
+    application-level error message in its own logs.
+  solution: >
+    dmesg showed the cgroup OOM killer terminating it — MemoryMax= in the unit
+    file was set far below what the service actually needs under load; raised
+    the limit.
+
+- id: networking-econnrefused-not-listening
+  category: networking
+  problem: >
+    A client gets ECONNREFUSED connecting to a service on what should be the
+    right host and port.
+  solution: >
+    The service process had crashed on startup due to an unrelated config error
+    and was never actually listening; connection refused was accurate, not a
+    firewall issue.
+
+- id: networking-firewall-timeout
+  category: networking
+  problem: >
+    A client trying to reach the same kind of service instead hangs and times
+    out rather than getting an immediate refusal.
+  solution: >
+    A security-group/firewall rule was silently dropping packets on that port
+    rather than rejecting them; a dropped packet times out, a closed port
+    refuses immediately — added the missing firewall rule.
+
+- id: git-detached-head
+  category: git
+  problem: >
+    After an interactive rebase, several commits that were "just there" a moment
+    ago seem to have vanished from the branch.
+  solution: >
+    The user was in a detached HEAD state during the rebase and then checked out
+    the branch again without merging; recovered the commits via `git reflog` and
+    a hard reset onto the found commit.
+
+- id: git-force-push-overwrite
+  category: git
+  problem: >
+    A teammate's commits disappeared from the shared branch entirely, not just
+    "not visible locally."
+  solution: >
+    Someone force-pushed a rebased local branch over the shared remote branch,
+    discarding the teammate's already-pushed commits; recovered from the
+    teammate's local reflog since the remote history was already overwritten.
+
+- id: db-postgres-pool-exhaustion
+  category: databases
+  problem: >
+    Under moderate load, the application starts throwing "connection pool
+    exhausted" errors even though the database server itself reports low CPU
+    usage.
+  solution: >
+    A code path was opening a new connection per request without returning it
+    to the pool on an error branch; fixed the leak and set an explicit pool size
+    ceiling with alerting.
+
+- id: db-postgres-lock-wait
+  category: databases
+  problem: >
+    Queries against the same table as usual now hang for tens of seconds instead
+    of failing outright.
+  solution: >
+    A long-running batch job was holding a row lock inside an uncommitted
+    transaction; other queries were waiting on that lock, not failing to
+    connect. Fixed by shortening the batch job's transaction scope.
+
+- id: embedded-jetson-cuda-pytorch
+  category: embedded
+  problem: >
+    Jetson Orin NX stopped detecting CUDA from PyTorch after reinstalling Python
+    packages; PyTorch build was CPU-only.
+  solution: >
+    Installed the CUDA-enabled PyTorch build specifically built for the Jetson's
+    Jetpack version, replacing the generic pip wheel that silently installs
+    CPU-only.
+  environment: {device: "Jetson Orin NX", os_version: "Jetpack 6"}
+
+- id: embedded-i2c-voltage-mismatch
+  category: embedded
+  problem: >
+    An I2C sensor connected to the same Jetson board returns garbage/corrupted
+    readings intermittently.
+  solution: >
+    The sensor was a 5V-logic part wired directly to the Jetson's 3.3V I2C
+    lines; added a level shifter, after which readings became consistent.
+  environment: {device: "Jetson Orin NX"}
+
+- id: cv-camera-calibration-distortion
+  category: computer_vision
+  problem: >
+    After undistorting camera frames with OpenCV, straight lines near the image
+    edges still look visibly curved.
+  solution: >
+    The calibration had been run with too few checkerboard corner views near the
+    edges of the frame, biasing the distortion coefficients; recalibrated with
+    a wider spread of board positions.
+
+- id: cv-detector-false-positives-lighting
+  category: computer_vision
+  problem: >
+    An object detector that worked well in testing produces frequent false
+    positives once deployed at the actual site.
+  solution: >
+    Not a calibration issue — the camera's auto-exposure was overcompensating
+    under the site's bright overhead lighting, washing out contrast the model
+    relied on; locked exposure/gain to fixed values matching the deployment site.
+
+- id: build-cmake-wrong-compiler
+  category: build_systems
+  problem: >
+    CMake keeps configuring the project with the wrong compiler even after
+    CC/CXX environment variables were changed.
+  solution: >
+    CMakeCache.txt from a previous configure had cached the old compiler path;
+    deleting the build directory (or CMakeCache.txt specifically) and
+    reconfiguring picked up the new compiler.
+
+- id: build-bazel-stale-remote-cache
+  category: build_systems
+  problem: >
+    A Bazel build succeeds but produces a binary that doesn't reflect a recent
+    source change, even after a clean checkout.
+  solution: >
+    A shared remote cache was serving a stale action result keyed on inputs that
+    didn't actually capture a generated-file dependency; fixed the missing input
+    declaration and bumped the cache key.
+
+# --- Filler incidents (noise for discrimination, not part of any confusable pair) ---
+
+- id: filler-k8s-pod-eviction
+  category: filler
+  problem: A Kubernetes pod keeps getting evicted under memory pressure on a shared node pool.
+  solution: Set explicit memory requests/limits so the scheduler stops overcommitting that node.
+
+- id: filler-npm-dependency-conflict
+  category: filler
+  problem: npm install fails with a peer dependency conflict after upgrading one package.
+  solution: Pinned the conflicting peer dependency to a compatible range in package.json.
+
+- id: filler-ssl-cert-expiry
+  category: filler
+  problem: A production API suddenly starts failing TLS handshakes for all clients.
+  solution: The certificate had expired; renewed it and added an expiry-monitoring alert.
+
+- id: filler-redis-eviction-cache-misses
+  category: filler
+  problem: Cache hit rate dropped sharply after a traffic spike, degrading response times.
+  solution: Redis's maxmemory-policy was evicting keys under memory pressure; increased maxmemory and switched to an LFU policy.
+
+- id: filler-terraform-state-lock
+  category: filler
+  problem: Terraform apply hangs indefinitely, refusing to acquire the state lock.
+  solution: A previous CI run had crashed without releasing the DynamoDB state lock; force-unlocked it after confirming no other apply was running.
+
+- id: filler-vscode-remote-container-fails
+  category: filler
+  problem: VS Code's Remote-Containers extension fails to attach to a running dev container.
+  solution: The devcontainer.json referenced an image tag that no longer existed; pointed it at the current tag.
+
+- id: filler-rust-borrow-checker
+  category: filler
+  problem: A Rust function won't compile due to a borrow-checker error that looks like it should be fine.
+  solution: Restructured the function to drop an immutable borrow before taking a mutable one, rather than fighting the checker with unsafe.
+
+- id: filler-graphql-n-plus-one
+  category: filler
+  problem: A GraphQL endpoint that returns a list of items with nested fields is extremely slow under real data volume.
+  solution: Added a dataloader to batch the nested-field queries instead of issuing one query per item (classic N+1).
+
+- id: filler-desktop-cuda-driver-crash
+  category: filler
+  problem: >
+    A desktop gaming PC's NVIDIA driver crashes randomly during gameplay,
+    completely unrelated to any deep learning or CUDA development work.
+  solution: Rolled back to a previous stable driver release; the newest driver had a known regression.
+  environment: {device: "desktop gaming PC", gpu: "RTX 4080"}

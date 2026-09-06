@@ -22,11 +22,21 @@ _TOKEN_RE = re.compile(r"[\w#./:_-]+", re.UNICODE)
 def _build_match_query(raw_query: str) -> str | None:
     """Quote each token individually so arbitrary user input can never be parsed as
     an FTS5 query operator (AND/OR/NOT, column filters, NEAR, parentheses, `*`) —
-    only as literal text to search for. Returns None if there is nothing searchable."""
+    only as literal text to search for. Tokens are joined with explicit `OR`: FTS5's
+    default for a bare sequence of phrases/tokens is implicit AND, which silently
+    requires *every* query word to appear in a matching row — fine for a 2-3 word
+    query, but it means any longer, natural-language query (the kind
+    search_engineering_knowledge is explicitly for) matches nothing unless the
+    incident happens to contain every single word verbatim. OR + bm25() ranking is
+    the standard IR retrieval model here: bm25's IDF weighting already rewards rarer,
+    more-specific terms over common ones, so this doesn't just degrade into
+    "matches everything." Caught by the Phase 15 retrieval benchmark, which is
+    exactly the kind of regression it exists to catch. Returns None if there is
+    nothing searchable."""
     tokens = _TOKEN_RE.findall(raw_query)
     if not tokens:
         return None
-    return " ".join('"' + token.replace('"', '""') + '"' for token in tokens)
+    return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
 
 
 _LEXICAL_SQL = text(
