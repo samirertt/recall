@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     openai_api_base: str | None = None
     openai_api_key: str | None = None
 
-    embeddings_enabled: bool = False
+    # Embeddings auto-detect availability (model present, loads successfully) — this
+    # is an explicit user opt-out (e.g. lower-resource machines, privacy preference),
+    # not a gate embeddings otherwise need to pass.
+    embeddings_enabled: bool = True
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     cors_origins: list[str] = ["http://localhost:5173"]

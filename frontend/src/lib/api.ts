@@ -114,6 +114,7 @@ export interface SearchSignals {
   vector?: Record<string, unknown> | null;
   exact_match?: Record<string, unknown> | null;
   attachment?: Record<string, unknown> | null;
+  relationship?: Record<string, unknown> | null;
 }
 
 export interface SearchResult {
@@ -129,6 +130,7 @@ export interface SearchResponse {
   query: string;
   results: SearchResult[];
   degraded: { vector_search: boolean };
+  weights_profile: string;
 }
 
 export interface Attachment {

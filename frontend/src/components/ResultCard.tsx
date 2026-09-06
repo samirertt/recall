@@ -27,6 +27,7 @@ function signalBadges(signals: SearchResult["signals"]): string[] {
   if (signals.trigram) badges.push("substring");
   if (signals.attachment) badges.push("attachment");
   if (signals.vector) badges.push("semantic");
+  if (signals.relationship) badges.push("related");
   return badges;
 }
 

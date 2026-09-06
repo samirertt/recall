@@ -12,11 +12,11 @@ It is not a notes app, and it is not a thin wrapper around
 is in [Why it exists](#why-it-exists) below.
 
 > **Status**: early. Capture, editing, attachments (with text/PDF/OCR extraction),
-> lexical search, and a working browser UI all work end-to-end today. There is no
-> semantic/embedding search, no AI enrichment, and no Claude Code integration yet.
-> See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for exactly what's
-> done, what's in progress, and what's next — it's kept up to date after every
-> milestone, not written once and forgotten.
+> hybrid search (lexical + semantic + relationship expansion), and a working browser
+> UI all work end-to-end today. There is no AI-based enrichment and no Claude Code
+> integration yet. See [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) for
+> exactly what's done, what's in progress, and what's next — it's kept up to date
+> after every milestone, not written once and forgotten.
 
 ---
 
@@ -39,8 +39,8 @@ Four things this system is deliberately built to remember, per incident:
 
 **SQLite (`data/engineering.db`) plus the original evidence files on disk are the only
 canonical state.** Everything else — the FTS5 lexical index, extracted attachment
-text, and (once built) embeddings and the vector index — is a derived artifact that
-can be deleted and regenerated from the canonical pair without losing anything. This
+text, and the embeddings/vector index — is a derived artifact that can be deleted and
+regenerated from the canonical pair without losing anything. This
 is why, for example, an OCR engine being unavailable or an embedding model changing
 can never corrupt or lose your actual incident history — see
 [docs/ARCHITECTURE.md § 10](docs/ARCHITECTURE.md#10-failuredegradation-matrix-section-52-made-concrete)
@@ -64,10 +64,14 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
   automatically (plain text/logs, PDF text layers via PyMuPDF with OCR fallback for
   scanned pages, and Tesseract OCR for screenshots) and becomes searchable — the
   *original* file is never modified, and a failed extraction never blocks the upload.
-- **Lexical search** — `GET /search?q=...` over SQLite FTS5 (BM25-ranked), plus a
-  trigram index for substring/identifier matches (error codes, partial log lines) and
-  a separate index over extracted attachment text. Every result reports which signals
-  matched. Arbitrary user queries are safe against FTS5 query-syntax injection.
+- **Hybrid search** — `GET /search?q=...` fuses four signals: SQLite FTS5 (BM25-ranked
+  lexical), a trigram substring index (error codes, partial log lines), local semantic
+  embeddings (`BAAI/bge-small-en-v1.5` via `fastembed`, fully offline after the first
+  model download), and 1-hop relationship expansion from top matches. Weighted-linear
+  fusion auto-renormalizes if the embedding model is ever unavailable — lexical search
+  never stops working. Every result reports exactly which signals matched and the
+  fusion weights used ("why did this rank highly"). Arbitrary user queries are safe
+  against FTS5 query-syntax injection.
 - **Possible-duplicate hints** — every new incident is checked against existing ones
   and surfaces close lexical matches (never auto-merged).
 - **A working browser UI** — capture, quick-capture, search with relevance/signal
@@ -76,8 +80,8 @@ current library/version choices are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## What's not built yet
 
-Semantic/hybrid search, AI-based enrichment (title/root-cause/tag extraction), the
-knowledge graph's write-side API, MCP/Claude Code integration, the CLI, and
+AI-based enrichment (title/root-cause/tag extraction), the knowledge graph's
+relationship-authoring API/UI, MCP/Claude Code integration, the CLI, and
 backup/export/import. All of these are researched and architected already (see the
 docs above) — they're sequenced in
 [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
@@ -101,10 +105,15 @@ uv run alembic upgrade head  # creates data/engineering.db and applies all migra
 ```
 
 `uv sync` also installs the attachment-ingestion dependencies (PyMuPDF, pypdf,
-pytesseract, Pillow) by default. OCR additionally needs the **Tesseract** system
-binary — it's optional: if it's missing, image attachments still upload fine, they
-just won't have searchable extracted text (this is tested, not assumed — see
-`backend/tests/test_attachments.py`).
+pytesseract, Pillow) and the embedding dependencies (`fastembed`, numpy) by default.
+OCR additionally needs the **Tesseract** system binary — it's optional: if it's
+missing, image attachments still upload fine, they just won't have searchable
+extracted text (this is tested, not assumed — see `backend/tests/test_attachments.py`).
+The embedding model (`BAAI/bge-small-en-v1.5`, ~35MB) downloads from Hugging Face on
+first use and then runs fully offline; if that first download can't happen (no
+network, blocked registry), semantic search silently stays off and lexical search is
+unaffected (`GET /health` and every search response's `degraded.vector_search` flag
+report this honestly rather than erroring).
 
 ```bash
 # Debian/Ubuntu
@@ -196,11 +205,14 @@ GET /search?q=<query>&limit=20
 ```
 
 Returns results ranked by a `fused_score`, each with a `signals` breakdown (which of
-lexical/trigram/attachment-text matched, and how) and a top-level `degraded` object —
-today `vector_search` is always `true` because semantic search isn't built yet, so the
-response is honest about running lexical-only rather than silently pretending to be
-hybrid. See [docs/ARCHITECTURE.md § 5](docs/ARCHITECTURE.md#5-retrieval-pipeline-phase-7-9-detail)
-for where this is headed.
+lexical/trigram/vector/attachment-text/relationship matched, and how), a top-level
+`degraded` object (`vector_search: true` only if the embedding model genuinely
+couldn't be loaded — search keeps working lexical-only rather than erroring), and the
+`weights_profile` that produced the ranking. See
+[docs/ARCHITECTURE.md § 5](docs/ARCHITECTURE.md#5-retrieval-pipeline-phase-7-9-detail)
+for the full pipeline design, including what's still simplified (no dedicated
+exact-identifier extraction yet; metadata/environment-aware filtering isn't exposed
+on the endpoint yet).
 
 ## Claude Code integration
 

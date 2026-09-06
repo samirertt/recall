@@ -2,6 +2,8 @@
 the MCP server (docs/ARCHITECTURE.md § 2) — no business logic duplicated behind MCP.
 """
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +14,9 @@ from app.models.incident import Attempt, Incident
 from app.models.reference import Project, Tag, Technology
 from app.models.relationships import IncidentProject, IncidentTag, IncidentTechnology
 from app.schemas.incident import IncidentCreate, IncidentUpdate, QuickCaptureIn
+from app.services.embeddings.service import embed_incident
+
+logger = logging.getLogger(__name__)
 
 _INCIDENT_LOAD_OPTIONS = (
     selectinload(Incident.environment),
@@ -36,6 +41,7 @@ async def create_incident(session: AsyncSession, data: IncidentCreate) -> Incide
     )
     session.add(incident)
     await session.commit()
+    await _try_embed(session, incident)
     return await get_incident(session, incident.id)
 
 
@@ -52,6 +58,16 @@ def _heuristic_title(raw_problem: str, max_len: int = 120) -> str:
         if stripped:
             return stripped[:max_len]
     return raw_problem[:max_len]
+
+
+async def _try_embed(session: AsyncSession, incident: Incident) -> None:
+    """Embedding is best-effort and must never fail/block a capture or edit
+    (docs/ARCHITECTURE.md § 10 degradation matrix) — errors never propagate, but are
+    logged rather than silently swallowed (Section 87: don't hide failures)."""
+    try:
+        await embed_incident(session, incident)
+    except Exception:
+        logger.exception("Embedding failed for incident %s; continuing without it", incident.id)
 
 
 async def get_incident(session: AsyncSession, incident_id: int) -> Incident | None:
@@ -135,6 +151,7 @@ async def update_incident(
             incident.tag_links.append(IncidentTag(tag_id=tag.id))
 
     await session.commit()
+    await _try_embed(session, incident)
     return await get_incident(session, incident_id)
 
 

@@ -1,6 +1,7 @@
-"""Phase 7 lexical search API tests — including the acceptance-test shape from
-Section 76/57: an environment-specific match should outrank a generic one, and
-retrieval must survive a query containing FTS5-special characters unscathed."""
+"""Phase 7/9 search API tests — including the acceptance-test shape from Section
+76/57: an environment-specific match should outrank a generic one, and retrieval
+must survive a query containing FTS5-special characters unscathed. Hybrid/vector-
+specific behavior lives in test_hybrid_search.py."""
 
 
 async def test_search_finds_created_incident_by_keyword(client):
@@ -16,7 +17,7 @@ async def test_search_finds_created_incident_by_keyword(client):
     resp = await client.get("/search", params={"q": "CUDA PyTorch"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["degraded"]["vector_search"] is True  # Phase 8 not implemented yet
+    assert body["degraded"]["vector_search"] is False  # embedding provider is available
     assert len(body["results"]) >= 1
     assert "CUDA" in body["results"][0]["title"] or "Jetson" in body["results"][0]["title"]
 

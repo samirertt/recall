@@ -132,23 +132,24 @@ start of any new session — do not rely on conversational memory.
     Result: backend/tests/test_api_search.py — keyword match, FTS5-special-character safety (`_build_match_query`'s per-token quoting), empty-result handling, ranking sanity. All passing.
 
 ## PHASE 8 — Embeddings
-- [ ] Embedding provider abstraction
-- [ ] Local embedding model integration
-- [ ] Embedding storage + model/version metadata
-- [ ] Vector index (chosen per RESEARCH.md)
-- [ ] `rebuild-embeddings` command
-- [ ] Embedding tests
+- [x] Embedding provider abstraction — `EmbeddingProvider` Protocol (app/services/embeddings/provider.py), lazy/cached singleton so model load never happens at import time
+- [x] Local embedding model integration — `BAAI/bge-small-en-v1.5` via `fastembed` 0.8.0 (ONNX, no PyTorch), matches docs/RESEARCH.md exactly
+- [x] Embedding storage + model/version metadata — `ChunkEmbedding` (Phase 2) tagged `model_name`/`model_revision`/`dims`; mismatched-model rows are simply excluded from vector search, never mixed
+- [x] Vector index (chosen per RESEARCH.md) — NumPy brute-force cosine over all current-model `ChunkEmbedding` rows (app/services/embeddings/service.py::search_vector); `sqlite-vec` upgrade path documented, not needed at this scale
+- [x] `rebuild-embeddings` command — `rebuild_embeddings()` service function (CLI wiring is Phase 13)
+- [x] Embedding tests — backend/tests/test_hybrid_search.py: real semantic search (near-zero lexical overlap query), graceful degradation when the provider is unavailable, rebuild-all
 
 ## PHASE 9 — Hybrid Retrieval
-- [ ] Lexical retrieval integration
-- [ ] Semantic retrieval integration
-- [ ] Exact error/code boost integrated into fusion
-- [ ] Technology / project / environment-aware scoring
-- [ ] Relationship-graph expansion
-- [ ] Score fusion (configurable, documented formula)
-- [ ] Reranking (if justified by RESEARCH.md)
-- [ ] "Why this ranked highly" explanation
-- [ ] Retrieval benchmark harness
+- [x] Lexical retrieval integration
+- [x] Semantic retrieval integration
+- [~] Exact error/code boost integrated into fusion
+    Result: no dedicated identifier-extraction subsystem (`incident_identifiers` table + regex library + short-circuit) yet — the trigram substring signal is a partial stand-in. Explicitly deferred, not silently dropped; see docs/RESEARCH.md § Hybrid Retrieval.
+- [ ] Technology / project / environment-aware scoring — not wired into fusion yet (metadata filtering on GET /search is also still open from Phase 7)
+- [x] Relationship-graph expansion — 1-hop expansion from top seed candidates (fixed small slot count, decayed score), app/services/retrieval/search.py
+- [x] Score fusion (configurable, documented formula) — weighted-linear fusion (app/services/retrieval/fusion.py), pure functions unit-tested in isolation (test_fusion.py), auto-renormalizes when the vector signal is unavailable
+- [ ] Reranking — deliberately deferred per docs/RESEARCH.md (not justified at this scale); architecture leaves room for a pluggable post-fusion stage
+- [x] "Why this ranked highly" explanation — every result carries a per-signal breakdown + the `weights_profile` id that produced it
+- [ ] Retrieval benchmark harness — the ~150-250-incident labeled benchmark from docs/RESEARCH.md § Retrieval Evaluation is not built; only ad hoc integration tests exist so far
 
 ## PHASE 10 — AI Enrichment
 - [ ] Title generation
