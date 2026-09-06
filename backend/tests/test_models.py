@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+
 from app.models import (
     Attempt,
     Environment,
@@ -11,7 +13,6 @@ from app.models import (
     Technology,
 )
 from app.models.enums import AttributionSource, IncidentRelationType, IncidentStatus
-from sqlalchemy import select
 
 
 async def test_incident_create_with_attempts_and_environment(db_session):

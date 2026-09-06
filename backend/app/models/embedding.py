@@ -8,9 +8,10 @@ the v1 retrieval mechanism; sqlite-vec is the documented upgrade path if ever ne
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from app.db.base import Base
 from sqlalchemy import ForeignKey, Integer, LargeBinary, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.incident import Incident

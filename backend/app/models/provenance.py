@@ -7,11 +7,12 @@ new rows here without ever touching Incident.raw_problem/raw_solution.
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from app.db.base import Base
-from app.models.enums import ProvenanceBasis
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+from app.models.enums import ProvenanceBasis
 
 if TYPE_CHECKING:
     from app.models.incident import Incident

@@ -6,9 +6,11 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import get_settings
 from app.db.session import get_session_factory, reset_engine_cache
-from sqlalchemy.ext.asyncio import AsyncSession
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,3 +45,13 @@ def configured_db(test_db_path: Path) -> Path:
 async def db_session(configured_db: Path) -> AsyncIterator[AsyncSession]:
     async with get_session_factory()() as session:
         yield session
+
+
+@pytest_asyncio.fixture
+async def client(configured_db: Path) -> AsyncIterator[AsyncClient]:
+    from app.main import create_app
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac

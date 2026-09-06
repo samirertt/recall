@@ -3,10 +3,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from app.db.base import Base
-from app.models.mixins import TimestampMixin
 from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.incident import Incident

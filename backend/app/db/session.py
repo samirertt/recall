@@ -8,7 +8,6 @@ and so the FastAPI app creates its engine during startup rather than at import t
 from collections.abc import AsyncIterator
 from functools import lru_cache
 
-from app.core.config import get_settings
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -16,6 +15,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+from app.core.config import get_settings
 
 
 def build_engine(database_url: str) -> AsyncEngine:

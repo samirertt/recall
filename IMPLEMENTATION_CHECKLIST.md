@@ -75,14 +75,16 @@ start of any new session — do not rely on conversational memory.
     Result: backend/tests/test_migrations.py (upgrade/downgrade round-trip, FTS5 insert/update/delete sync) + test_models.py (relationships, recursive knowledge-graph traversal, CHECK constraint). 7/7 passing, ruff clean.
 
 ## PHASE 3 — Backend
-- [ ] FastAPI app scaffold
-- [ ] CRUD endpoints (incidents, projects, technologies, tags)
-- [ ] Request/response validation (Pydantic)
-- [ ] Centralized error handling
-- [ ] Service layer wiring
-- [ ] Configuration (env-based, local-first defaults)
-- [ ] Health/doctor endpoint
-- [ ] Backend tests
+- [x] FastAPI app scaffold — backend/app/main.py (app factory, CORS)
+- [~] CRUD endpoints (incidents, projects, technologies, tags)
+    Result: full incident CRUD (create/get/list/patch/archive) shipped. Projects/technologies/tags have no dedicated CRUD routes yet — created implicitly via get-or-create when attached to an incident (services/incidents/service.py::_get_or_create). Standalone list/rename endpoints for them are still open.
+- [x] Request/response validation (Pydantic) — backend/app/schemas/{incident,search}.py, kept separate from SQLAlchemy models by design (docs/RESEARCH.md § Backend Stack)
+- [~] Centralized error handling — 404s via HTTPException; no global exception handler/error envelope yet (open)
+- [x] Service layer wiring — backend/app/services/{incidents,retrieval}/*, shared by API now, MCP later (Phase 12)
+- [x] Configuration (env-based, local-first defaults) — backend/app/core/config.py (pydantic-settings, ENGMEM_ prefix)
+- [x] Health/doctor endpoint — GET /health (DB path, FTS5 availability, AI/embedding config); full `engkb doctor` richness is Phase 13
+- [x] Backend tests
+    Result: backend/tests/test_api_incidents.py, test_api_search.py, test_api_health.py — httpx ASGITransport against the real app. 17/17 passing overall, ruff clean. Manually smoke-tested via a real `uvicorn` process (capture → lexical search round-trip confirmed).
 
 ## PHASE 4 — Frontend
 - [ ] Vite + React + TS + Tailwind scaffold
@@ -93,14 +95,17 @@ start of any new session — do not rely on conversational memory.
 - [ ] Search view
 
 ## PHASE 5 — Incident Capture
-- [ ] Zero-friction "New Incident" (problem + solution + attach, nothing else required)
-- [ ] Quick Capture (paste raw text, save immediately, async structuring)
-- [ ] Edit incident
-- [ ] Archive/obsolete incident (never hard-delete knowledge)
-- [ ] Failed attempts (Attempt entity CRUD)
-- [ ] Environment capture
-- [ ] Project association
-- [ ] Tags / technology association
+- [x] Zero-friction "New Incident" (problem + solution + attach, nothing else required)
+    Result: POST /incidents — only raw_problem is required; status auto-set from whether raw_solution is present. Attach-on-create is not wired (Phase 6 attachments not built yet); attaching after create will work once Phase 6 lands.
+- [x] Quick Capture (paste raw text, save immediately, async structuring)
+    Result: POST /incidents/quick-capture saves raw_text as raw_problem immediately. "Async structuring" is a no-op today — no AI provider is wired up yet (Phase 10); every captured incident is marked needs_ai_review=true via a heuristic title (first non-blank line) so nothing is silently lost, consistent with Section 21.
+- [x] Edit incident — PATCH /incidents/{id} (backend/app/schemas/incident.py::IncidentUpdate)
+- [x] Archive/obsolete incident (never hard-delete knowledge) — POST /incidents/{id}/archive sets status=obsolete; row is never deleted
+- [x] Failed attempts (Attempt entity CRUD) — replace-all via PATCH `attempts` field (ordered)
+- [x] Environment capture — PATCH `environment` field (one environment per incident)
+- [x] Project association — PATCH `project_names` (get-or-create by name)
+- [x] Tags / technology association — PATCH `tag_names` / `technology_names` (get-or-create by name)
+- [ ] Basic duplicate-detection UX surfaced in a frontend (backend already returns `possible_duplicates` on create — Section 22 — but there's no UI yet since Phase 4 hasn't started)
 
 ## PHASE 6 — Attachments
 - [ ] Upload endpoint
@@ -114,11 +119,13 @@ start of any new session — do not rely on conversational memory.
 - [ ] Integrity checks (missing/orphaned files)
 
 ## PHASE 7 — Search (Lexical)
-- [ ] FTS5 virtual table + sync triggers
-- [ ] Exact error/identifier matching boost
-- [ ] Metadata filtering (project/technology/environment)
-- [ ] BM25-based ranking
-- [ ] Lexical search tests
+- [x] FTS5 virtual table + sync triggers (built in Phase 2's migration; see there)
+- [~] Exact error/identifier matching boost
+    Result: the trigram substring table (incidents_fts_trigram) catches exact identifiers/error codes today, surfaced as a separate signal — but there's no dedicated regex-based identifier extraction/short-circuit yet (docs/RESEARCH.md § Hybrid Retrieval's "exact-match short-circuit"). Deferred to Phase 9 alongside real score fusion.
+- [ ] Metadata filtering (project/technology/environment) — not yet exposed on GET /search (open; straightforward to add as query params over the existing join tables)
+- [x] BM25-based ranking — column-weighted bm25() over incidents_fts (backend/app/services/retrieval/lexical.py); weights are an initial default, not yet the configurable profile from Phase 9
+- [x] Lexical search tests
+    Result: backend/tests/test_api_search.py — keyword match, FTS5-special-character safety (`_build_match_query`'s per-token quoting), empty-result handling, ranking sanity. All passing.
 
 ## PHASE 8 — Embeddings
 - [ ] Embedding provider abstraction
@@ -230,7 +237,15 @@ start of any new session — do not rely on conversational memory.
 ---
 
 ## Known limitations / open items
-_(updated as work proceeds)_
+- No frontend yet (Phase 4 not started) — everything so far is verified via the API/pytest and one manual curl smoke test against a real `uvicorn` process.
+- No attachments (Phase 6), embeddings/vector search (Phase 8), real hybrid score fusion (Phase 9), AI enrichment (Phase 10), knowledge-graph write paths beyond the DB layer (Phase 11 traversal exists, but no API/UI to create relations yet), MCP/Claude Code integration (Phase 12), CLI (Phase 13), or backup/import (Phase 14).
+- Duplicate detection (Section 22) is backend-only right now (`possible_duplicates` on incident creation) — no UI to act on it.
+- Projects/Technologies/Tags have no standalone list/rename endpoints — only get-or-create-by-name via incident PATCH.
+- `git push` is not possible from this sandboxed dev environment (no HTTPS credential helper or registered SSH key for the `origin` remote) — commits are local only until the user pushes them or authorizes the environment.
 
 ## Next actions
+1. Phase 6 — Attachments: upload endpoint, filesystem storage, text/PDF/OCR extraction pipeline (docs/RESEARCH.md § Attachment Ingestion & OCR).
+2. Phase 4 — Frontend: Vite/React/Tailwind scaffold, capture form, search view, incident detail view (docs/RESEARCH.md § Frontend Stack for exact versions).
+3. Phase 8/9 — Embeddings + hybrid retrieval (fastembed/bge-small, NumPy vector table, weighted fusion).
+4. Phase 12/13 — MCP server + CLI, so Claude Code can use this knowledge base directly.
 _(updated as work proceeds)_

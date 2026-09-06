@@ -8,11 +8,12 @@ attachment's content hash, never the source of truth.
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from app.db.base import Base
-from app.models.enums import ExtractionStatus
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+from app.models.enums import ExtractionStatus
 
 if TYPE_CHECKING:
     from app.models.incident import Incident
