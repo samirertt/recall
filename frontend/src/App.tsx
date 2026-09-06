@@ -1,4 +1,5 @@
 import { Link, Route, Routes } from "react-router-dom";
+import CommandPalette from "./components/CommandPalette";
 import IncidentDetailPage from "./pages/IncidentDetailPage";
 import HomePage from "./pages/HomePage";
 
@@ -13,6 +14,9 @@ export default function App() {
           <span className="text-xs text-neutral-400">
             local-first engineering incident knowledge
           </span>
+          <kbd className="ml-auto rounded border border-neutral-300 px-1.5 py-0.5 text-[10px] text-neutral-400 dark:border-neutral-700">
+            ⌘K to search
+          </kbd>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
@@ -21,6 +25,7 @@ export default function App() {
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
         </Routes>
       </main>
+      <CommandPalette />
     </div>
   );
 }

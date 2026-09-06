@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Incident } from "../lib/api";
 
@@ -53,6 +53,16 @@ export default function IncidentDetailPage() {
     mutationFn: () => api.archiveIncident(incidentId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["incident", incidentId] }),
   });
+
+  // Section 50: Escape cancels the edit form, matching the palette's own Escape-to-close.
+  useEffect(() => {
+    if (!editing) return;
+    function handleKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") setEditing(false);
+    }
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, [editing]);
 
   const uploadMutation = useMutation({
     mutationFn: (f: File) => api.uploadAttachment(incidentId, f),

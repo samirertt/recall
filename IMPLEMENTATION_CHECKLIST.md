@@ -243,11 +243,14 @@ start of any new session — do not rely on conversational memory.
 - [x] Basic perf observability (durations logged, no private data) — `app/core/timing.py::log_duration()`, a small context manager wired into `search_incidents`, `embed_incident`, and attachment extraction. Logs duration + counts/ids only (e.g. `query_len`, `limit`, `incident_id`, `size_bytes`) at DEBUG on the `app.perf` logger — never query text, incident content, or attachment content. Manually verified the log lines contain no content.
 
 ## PHASE 18 — UX Polish
-- [ ] Keyboard shortcuts (Cmd/Ctrl+K, N, Enter, Escape)
-- [ ] Command palette
-- [ ] Search result "why it ranked" UI
-- [ ] Accessibility pass
-- [ ] Documentation pass
+- [x] Keyboard shortcuts (Cmd/Ctrl+K, N, Enter, Escape)
+    Result: ⌘K opens the command palette (global, works from any route — previously only focused an on-page search box that didn't exist on the incident detail page); ⌘N focuses the capture form; ⌘Enter saves it; Escape closes the palette (Radix Dialog's built-in behavior) and now also cancels an in-progress incident edit.
+- [x] Command palette
+    Result: `frontend/src/components/CommandPalette.tsx` using `cmdk` 1.1.1 (matches docs/RESEARCH.md's recommendation exactly) — live incident search-as-you-type plus static actions, mounted once in `App.tsx` so it works on every page. Manually verified in a real browser: opened from the incident detail page (proving the "works from anywhere" fix), typed a query, saw live results, clicked one, navigated and closed; separately confirmed Escape closes it. Zero console errors.
+- [x] Search result "why it ranked" UI — per-signal badges (lexical/substring/attachment/semantic/related) + relevance % on every result card (Phase 4); the fusion `weights_profile` isn't surfaced in the UI itself, only in the raw API response
+- [~] Accessibility pass
+    Result: light pass only — `aria-label`s added where text alone didn't already describe an element (e.g. the search input), the command palette has a proper dialog `label`. **Not** a full WCAG audit (no screen-reader testing, no systematic focus-trap/contrast review) — honest gap, not silently skipped.
+- [x] Documentation pass — docs/SEARCH.md, docs/BACKUP_AND_MIGRATION.md, docs/CLAUDE_CODE.md, docs/DEVELOPMENT.md all written (Phase 12/14/16); README kept current after every phase; this checklist itself is the continuously-updated record
 
 ## PHASE 19 — Final Validation
 - [ ] Full scenario: create → structure → store → attach → embed → index → search → retrieve → Claude synthesis → edit → export → delete local copy → import → rebuild → search again
