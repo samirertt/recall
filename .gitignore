@@ -1,0 +1,47 @@
+# --- User data (canonical + derived) — never committed ---
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/attachments/*
+!data/attachments/.gitkeep
+data/embeddings/*
+!data/embeddings/.gitkeep
+data/indexes/*
+!data/indexes/.gitkeep
+*.sqlite
+*.sqlite3
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Node / frontend ---
+node_modules/
+dist/
+frontend/dist/
+.vite/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Backups produced by the app ---
+*.backup.zip
+/backups/
